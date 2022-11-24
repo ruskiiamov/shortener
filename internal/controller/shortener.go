@@ -41,16 +41,16 @@ func get(s usecase.Shortener, w http.ResponseWriter, r *http.Request) {
 }
 
 func post(s usecase.Shortener, w http.ResponseWriter, r *http.Request) {
-	url, err := io.ReadAll(r.Body)
+	originalURL, err := io.ReadAll(r.Body)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 	}
 
-	shortenedURL, err := s.Shorten(string(url))
+	shortenedURL, err := s.Shorten(string(originalURL))
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 	}
 
 	w.WriteHeader(http.StatusCreated)
-	w.Write([]byte(shortenedURL))
+	w.Write([]byte("http://" + r.Host + "/" + shortenedURL))
 }
