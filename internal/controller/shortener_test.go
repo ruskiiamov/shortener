@@ -28,28 +28,28 @@ func (m *MockedShortener) GetOriginal(id string) (string, error) {
 
 func TestGet(t *testing.T) {
 	tests := []struct {
-		name        string
-		host        string
-		id          string
-		res         string
-		err         error
-		wantErr     bool
+		name    string
+		host    string
+		id      string
+		res     string
+		err     error
+		wantErr bool
 	}{
 		{
-			name:        "ok",
-			host:        "/0",
-			id:          "0",
-			res:         "http://shortener",
-			err:         nil,
-			wantErr:     false,
+			name:    "ok",
+			host:    "/0",
+			id:      "0",
+			res:     "http://shortener",
+			err:     nil,
+			wantErr: false,
 		},
 		{
-			name:        "not ok",
-			host:        "/abc",
-			id:          "abc",
-			res:         "",
-			err:         errors.New("wrong id"),
-			wantErr:     true,
+			name:    "not ok",
+			host:    "/abc",
+			id:      "abc",
+			res:     "",
+			err:     errors.New("wrong id"),
+			wantErr: true,
 		},
 	}
 	for _, tt := range tests {
@@ -64,6 +64,7 @@ func TestGet(t *testing.T) {
 			h.ServeHTTP(w, request)
 
 			res := w.Result()
+			defer res.Body.Close()
 
 			mockedShortener.AssertExpectations(t)
 

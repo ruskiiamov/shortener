@@ -52,9 +52,9 @@ func (s *shortenerSlice) Get(id string) (*entity.ShortenedURL, error) {
 	return shortenedURL, nil
 }
 
-func (s *shortenerSlice) getID(originalURL string) (int, bool) {
+func (s *shortenerSlice) getID(url string) (int, bool) {
 	for id, originalURL := range s.s {
-		if originalURL == originalURL {
+		if originalURL == url {
 			return id, true
 		}
 	}
