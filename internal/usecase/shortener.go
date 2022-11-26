@@ -6,19 +6,19 @@ type shortenerUseCase struct {
 	repo ShortenerRepo
 }
 
-func NewShortenerUseCase(r ShortenerRepo) *shortenerUseCase {
+func NewShortenerUseCase(r ShortenerRepo) Shortener {
 	return &shortenerUseCase{repo: r}
 }
 
-func (uc *shortenerUseCase) Shorten(url string) (string, error) {
+func (uc *shortenerUseCase) Shorten(host, url string) (string, error) {
 	shortenedURL := entity.ShortenedURL{OriginalURL: url}
-	
+
 	id, err := uc.repo.Add(shortenedURL)
 	if err != nil {
 		return "", err
 	}
 
-	return id, nil
+	return host + "/" + id, nil
 }
 
 func (uc *shortenerUseCase) GetOriginal(id string) (string, error) {

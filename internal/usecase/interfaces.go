@@ -4,7 +4,7 @@ import "github.com/ruskiiamov/shortener/internal/entity"
 
 type (
 	Shortener interface {
-		Shorten(url string) (string, error)
+		Shorten(host, url string) (string, error)
 		GetOriginal(id string) (string, error)
 	}
 

@@ -29,7 +29,7 @@ func get(s usecase.Shortener, w http.ResponseWriter, r *http.Request) {
 	} else {
 		id = uri
 	}
-	
+
 	originalURL, err := s.GetOriginal(id)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -42,15 +42,18 @@ func get(s usecase.Shortener, w http.ResponseWriter, r *http.Request) {
 
 func post(s usecase.Shortener, w http.ResponseWriter, r *http.Request) {
 	originalURL, err := io.ReadAll(r.Body)
+	defer r.Body.Close()
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 	}
 
-	shortenedURL, err := s.Shorten(string(originalURL))
+	host := "http://" + r.Host
+
+	shortenedURL, err := s.Shorten(host, string(originalURL))
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 	}
 
 	w.WriteHeader(http.StatusCreated)
-	w.Write([]byte("http://" + r.Host + "/" + shortenedURL))
+	w.Write([]byte(shortenedURL))
 }
