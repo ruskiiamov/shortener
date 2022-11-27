@@ -6,14 +6,13 @@ import (
 	"strconv"
 
 	"github.com/ruskiiamov/shortener/internal/entity"
-	"github.com/ruskiiamov/shortener/internal/usecase"
 )
 
 type shortenerSlice struct {
 	s []string
 }
 
-func NewShortenerSlice() usecase.ShortenerRepo {
+func NewShortenerSlice() *shortenerSlice {
 	return &shortenerSlice{
 		s: []string{},
 	}

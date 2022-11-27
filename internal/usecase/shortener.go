@@ -1,12 +1,19 @@
 package usecase
 
-import "github.com/ruskiiamov/shortener/internal/entity"
+import (
+	"github.com/ruskiiamov/shortener/internal/entity"
+)
+
+type ShortenerRepo interface {
+	Add(entity.ShortenedURL) (id string, err error)
+	Get(id string) (*entity.ShortenedURL, error)
+}
 
 type shortenerUseCase struct {
 	repo ShortenerRepo
 }
 
-func NewShortenerUseCase(r ShortenerRepo) Shortener {
+func NewShortener(r ShortenerRepo) *shortenerUseCase {
 	return &shortenerUseCase{repo: r}
 }
 

@@ -5,23 +5,9 @@ import (
 	"testing"
 
 	"github.com/ruskiiamov/shortener/internal/entity"
+	"github.com/ruskiiamov/shortener/internal/usecase/repo"
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/mock"
 )
-
-type MockedShortenerRepo struct {
-	mock.Mock
-}
-
-func (m *MockedShortenerRepo) Add(shortenedURL entity.ShortenedURL) (id string, err error) {
-	args := m.Called(shortenedURL)
-	return args.String(0), args.Error(1)
-}
-
-func (m *MockedShortenerRepo) Get(id string) (*entity.ShortenedURL, error) {
-	args := m.Called(id)
-	return args.Get(0).(*entity.ShortenedURL), args.Error(1)
-}
 
 func TestShorten(t *testing.T) {
 	type args struct {
@@ -52,10 +38,11 @@ func TestShorten(t *testing.T) {
 			err:     errors.New("wrong url"),
 		},
 	}
+
+	mockedShortenerRepo := new(repo.MockedShortenerRepo)
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			mockedShortenerRepo := new(MockedShortenerRepo)
-
 			mockedShortenerRepo.On("Add", entity.ShortenedURL{
 				OriginalURL: tt.args.url,
 			}).Return(tt.res, tt.err)
@@ -109,10 +96,11 @@ func TestGetOriginal(t *testing.T) {
 			err:     errors.New("wrong id"),
 		},
 	}
+
+	mockedShortenerRepo := new(repo.MockedShortenerRepo)
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			mockedShortenerRepo := new(MockedShortenerRepo)
-
 			mockedShortenerRepo.On("Get", tt.args.id).Return(tt.res, tt.err)
 
 			uc := &shortenerUseCase{
