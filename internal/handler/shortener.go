@@ -7,7 +7,7 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
-func (h *Handler) getUrl() func(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) getURL() func(w http.ResponseWriter, r *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		id := chi.URLParam(r, "id")
 
@@ -22,7 +22,7 @@ func (h *Handler) getUrl() func(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (h *Handler) addUrl() func(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) addURL() func(w http.ResponseWriter, r *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		originalURL, err := io.ReadAll(r.Body)
 		defer r.Body.Close()

@@ -24,8 +24,8 @@ func New(s Shortener) *Handler {
 	h.Use(middleware.Logger)
 	h.Use(middleware.Recoverer)
 
-	h.Get("/{id}", h.getUrl())
-	h.Post("/", h.addUrl())
+	h.Get("/{id}", h.getURL())
+	h.Post("/", h.addURL())
 
 	return h
 }
