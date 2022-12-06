@@ -1,4 +1,4 @@
-package handler
+package router
 
 import (
 	"errors"
@@ -6,7 +6,6 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/ruskiiamov/shortener/internal/usecase"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -37,18 +36,18 @@ func TestGetUrl(t *testing.T) {
 		},
 	}
 
-	mockedShortener := new(usecase.MockedShortener)
-	h := New(mockedShortener)
+	mockedURLHandler := new(MockedURLHandler)
+	h := NewRouter(mockedURLHandler)
 	ts := httptest.NewServer(h)
 	defer ts.Close()
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			mockedShortener.On("GetOriginal", tt.id).Return(tt.res, tt.err)
+			mockedURLHandler.On("GetOriginal", tt.id).Return(tt.res, tt.err)
 
 			statusCode, _, header := testRequest(t, ts, http.MethodGet, tt.path, nil)
 
-			mockedShortener.AssertExpectations(t)
+			mockedURLHandler.AssertExpectations(t)
 
 			if tt.wantErr {
 				assert.Equal(t, http.StatusBadRequest, statusCode)
@@ -85,18 +84,18 @@ func TestPost(t *testing.T) {
 		},
 	}
 
-	mockedShortener := new(usecase.MockedShortener)
-	h := New(mockedShortener)
+	mockedURLHandler := new(MockedURLHandler)
+	h := NewRouter(mockedURLHandler)
 	ts := httptest.NewServer(h)
 	defer ts.Close()
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			mockedShortener.On("Shorten", ts.URL, tt.body).Return(ts.URL+tt.res, tt.err)
+			mockedURLHandler.On("Shorten", ts.URL, tt.body).Return(ts.URL+tt.res, tt.err)
 
 			statusCode, body, _ := testRequest(t, ts, http.MethodPost, "/", []byte(tt.body))
 
-			mockedShortener.AssertExpectations(t)
+			mockedURLHandler.AssertExpectations(t)
 
 			if tt.wantErr {
 				assert.Equal(t, http.StatusBadRequest, statusCode)

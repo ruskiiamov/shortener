@@ -1,11 +1,9 @@
-package usecase
+package url
 
 import (
 	"errors"
 	"testing"
 
-	"github.com/ruskiiamov/shortener/internal/entity"
-	"github.com/ruskiiamov/shortener/internal/usecase/repo"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -39,21 +37,21 @@ func TestShorten(t *testing.T) {
 		},
 	}
 
-	mockedShortenerRepo := new(repo.MockedShortenerRepo)
+	mockedStorage := new(MockedStorage)
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			mockedShortenerRepo.On("Add", entity.ShortenedURL{
-				OriginalURL: tt.args.url,
+			mockedStorage.On("Add", OriginalURL{
+				URL: tt.args.url,
 			}).Return(tt.res, tt.err)
 
-			uc := &shortenerUseCase{
-				repo: mockedShortenerRepo,
+			h := &handler{
+				storage: mockedStorage,
 			}
 
-			got, err := uc.Shorten("http://localhost:8080", tt.args.url)
+			got, err := h.Shorten("http://localhost:8080", tt.args.url)
 
-			mockedShortenerRepo.AssertExpectations(t)
+			mockedStorage.AssertExpectations(t)
 
 			if tt.wantErr {
 				assert.NotNil(t, err)
@@ -76,7 +74,7 @@ func TestGetOriginal(t *testing.T) {
 		args    args
 		want    string
 		wantErr bool
-		res     *entity.ShortenedURL
+		res     *OriginalURL
 		err     error
 	}{
 		{
@@ -84,7 +82,7 @@ func TestGetOriginal(t *testing.T) {
 			args:    args{id: "0"},
 			want:    "http://shortener.com",
 			wantErr: false,
-			res:     &entity.ShortenedURL{OriginalURL: "http://shortener.com"},
+			res:     &OriginalURL{URL: "http://shortener.com"},
 			err:     nil,
 		},
 		{
@@ -97,17 +95,17 @@ func TestGetOriginal(t *testing.T) {
 		},
 	}
 
-	mockedShortenerRepo := new(repo.MockedShortenerRepo)
+	mockedStorage := new(MockedStorage)
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			mockedShortenerRepo.On("Get", tt.args.id).Return(tt.res, tt.err)
+			mockedStorage.On("Get", tt.args.id).Return(tt.res, tt.err)
 
-			uc := &shortenerUseCase{
-				repo: mockedShortenerRepo,
+			h := &handler{
+				storage: mockedStorage,
 			}
 
-			got, err := uc.GetOriginal(tt.args.id)
+			got, err := h.GetOriginal(tt.args.id)
 
 			if tt.wantErr {
 				assert.NotNil(t, err)

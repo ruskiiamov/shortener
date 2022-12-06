@@ -4,15 +4,17 @@ import (
 	"log"
 	"net/http"
 
-	"github.com/ruskiiamov/shortener/internal/handler"
-	"github.com/ruskiiamov/shortener/internal/usecase"
-	"github.com/ruskiiamov/shortener/internal/usecase/repo"
+	"github.com/ruskiiamov/shortener/internal/router"
+	"github.com/ruskiiamov/shortener/internal/storage"
+	"github.com/ruskiiamov/shortener/internal/url"
 )
 
-func main() {
-	shortenerRepo := repo.NewShortenerSlice()
-	shortenerUseCase := usecase.NewShortener(shortenerRepo)
-	handler := handler.New(shortenerUseCase)
+const port = ":8080"
 
-	log.Fatal(http.ListenAndServe(":8080", handler))
+func main() {
+	urlStorage := storage.NewURLStorage()
+	urlHandler := url.NewHandler(urlStorage)
+	router := router.NewRouter(urlHandler)
+
+	log.Fatal(http.ListenAndServe(port, router))
 }
