@@ -27,6 +27,7 @@ func NewHandler(c Converter, r Router) *Handler {
 
 	h.router.GET("/{id}", h.getURL)
 	h.router.POST("/", h.addURL)
+	h.router.POST("/api/shorten", h.addURLFromJSON)
 
 	return h
 }

@@ -1,13 +1,25 @@
 package server
 
 import (
+	"encoding/json"
 	"io"
 	"net/http"
 
 	"github.com/go-http-utils/headers"
 )
 
-const urlScheme = "http://"
+const (
+	urlScheme       = "http://"
+	applicationJSON = "application/json"
+)
+
+type url struct {
+	URL string `json:"url"`
+}
+
+type result struct {
+	Result string `json:"result"`
+}
 
 func (h *Handler) getURL(w http.ResponseWriter, r *http.Request) {
 	id := h.router.GetURLParam(r, "id")
@@ -39,4 +51,37 @@ func (h *Handler) addURL(w http.ResponseWriter, r *http.Request) {
 
 	w.WriteHeader(http.StatusCreated)
 	w.Write([]byte(shortURL))
+}
+
+func (h *Handler) addURLFromJSON(w http.ResponseWriter, r *http.Request) {
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	u := new(url)
+	if err := json.Unmarshal(body, u); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	host := urlScheme + r.Host
+
+	shortURL, err := h.converter.Shorten(host, string(u.URL))
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	res := result{shortURL}
+	jsonRes, err := json.Marshal(res)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	w.Header().Set(headers.ContentType, applicationJSON)
+	w.WriteHeader(http.StatusCreated)
+	w.Write(jsonRes)
 }
