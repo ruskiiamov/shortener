@@ -1,4 +1,4 @@
-package storage
+package data
 
 import (
 	"testing"
@@ -13,13 +13,13 @@ func TestAdd(t *testing.T) {
 	}
 	tests := []struct {
 		name    string
-		storage storage
+		keeper  dataKeeper
 		args    args
 		wantErr bool
 	}{
 		{
-			name:    "ok",
-			storage: storage([]string{}),
+			name:   "ok",
+			keeper: dataKeeper([]string{}),
 			args: args{
 				url: url.OriginalURL{
 					URL: "http://shortener.com",
@@ -28,8 +28,8 @@ func TestAdd(t *testing.T) {
 			wantErr: false,
 		},
 		{
-			name:    "wrong url",
-			storage: storage([]string{}),
+			name:   "wrong url",
+			keeper: dataKeeper([]string{}),
 			args: args{
 				url: url.OriginalURL{
 					URL: "shortener.com",
@@ -38,8 +38,8 @@ func TestAdd(t *testing.T) {
 			wantErr: true,
 		},
 		{
-			name:    "repeat url",
-			storage: storage([]string{"http://shortener.com"}),
+			name:   "repeat url",
+			keeper: dataKeeper([]string{"http://shortener.com"}),
 			args: args{
 				url: url.OriginalURL{
 					URL: "http://shortener.com",
@@ -50,7 +50,7 @@ func TestAdd(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			id, err := tt.storage.Add(tt.args.url)
+			id, err := tt.keeper.Add(tt.args.url)
 
 			if tt.wantErr {
 				assert.NotNil(t, err)
@@ -69,15 +69,15 @@ func TestGet(t *testing.T) {
 	}
 	tests := []struct {
 		name    string
-		storage storage
+		keeper  dataKeeper
 		args    args
 		want    *url.OriginalURL
 		wantErr bool
 	}{
 		{
-			name:    "ok",
-			storage: storage([]string{"http://shortener.com"}),
-			args:    args{id: "0"},
+			name:   "ok",
+			keeper: dataKeeper([]string{"http://shortener.com"}),
+			args:   args{id: "0"},
 			want: &url.OriginalURL{
 				ID:  "0",
 				URL: "http://shortener.com",
@@ -85,9 +85,9 @@ func TestGet(t *testing.T) {
 			wantErr: false,
 		},
 		{
-			name:    "not int id",
-			storage: storage([]string{"http://shortener.com"}),
-			args:    args{id: "abc"},
+			name:   "not int id",
+			keeper: dataKeeper([]string{"http://shortener.com"}),
+			args:   args{id: "abc"},
 			want: &url.OriginalURL{
 				ID:  "abc",
 				URL: "http://shortener.com",
@@ -95,9 +95,9 @@ func TestGet(t *testing.T) {
 			wantErr: true,
 		},
 		{
-			name:    "negative id",
-			storage: storage([]string{"http://shortener.com"}),
-			args:    args{id: "-2"},
+			name:   "negative id",
+			keeper: dataKeeper([]string{"http://shortener.com"}),
+			args:   args{id: "-2"},
 			want: &url.OriginalURL{
 				ID:  "-2",
 				URL: "http://shortener.com",
@@ -105,9 +105,9 @@ func TestGet(t *testing.T) {
 			wantErr: true,
 		},
 		{
-			name:    "too big id",
-			storage: storage([]string{"http://shortener.com", "http://shortener.com/info"}),
-			args:    args{id: "2"},
+			name:   "too big id",
+			keeper: dataKeeper([]string{"http://shortener.com", "http://shortener.com/info"}),
+			args:   args{id: "2"},
 			want: &url.OriginalURL{
 				ID:  "2",
 				URL: "http://shortener.com",
@@ -117,7 +117,7 @@ func TestGet(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := tt.storage.Get(tt.args.id)
+			got, err := tt.keeper.Get(tt.args.id)
 
 			if tt.wantErr {
 				assert.NotNil(t, err)

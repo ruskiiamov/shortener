@@ -1,4 +1,4 @@
-package storage
+package data
 
 import (
 	"errors"
@@ -8,47 +8,47 @@ import (
 	"github.com/ruskiiamov/shortener/internal/url"
 )
 
-type storage []string
+type dataKeeper []string
 
-func NewURLStorage() *storage {
-	return new(storage)
+func NewKeeper() *dataKeeper {
+	return new(dataKeeper)
 }
 
-func (s *storage) Add(originalURL url.OriginalURL) (id string, err error) {
+func (d *dataKeeper) Add(originalURL url.OriginalURL) (id string, err error) {
 	if _, err := neturl.ParseRequestURI(originalURL.URL); err != nil {
 		return "", err
 	}
 
-	if id, ok := s.getID(originalURL.URL); ok {
+	if id, ok := d.getID(originalURL.URL); ok {
 		return strconv.Itoa(id), nil
 	}
 
-	id = strconv.Itoa(len(*s))
-	*s = append(*s, originalURL.URL)
+	id = strconv.Itoa(len(*d))
+	*d = append(*d, originalURL.URL)
 
 	return id, nil
 }
 
-func (s *storage) Get(id string) (*url.OriginalURL, error) {
+func (d *dataKeeper) Get(id string) (*url.OriginalURL, error) {
 	intID, err := strconv.Atoi(id)
 	if err != nil {
 		return nil, errors.New("wrong id")
 	}
 
-	if intID < 0 || intID >= len(*s) {
+	if intID < 0 || intID >= len(*d) {
 		return nil, errors.New("wrong id")
 	}
 
 	originalURL := &url.OriginalURL{
 		ID:  id,
-		URL: (*s)[intID],
+		URL: (*d)[intID],
 	}
 
 	return originalURL, nil
 }
 
-func (s *storage) getID(url string) (int, bool) {
-	for id, originalURL := range *s {
+func (d *dataKeeper) getID(url string) (int, bool) {
+	for id, originalURL := range *d {
 		if originalURL == url {
 			return id, true
 		}

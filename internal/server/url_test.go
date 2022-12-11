@@ -1,4 +1,4 @@
-package router
+package server
 
 import (
 	"errors"
@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/ruskiiamov/shortener/internal/chi"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -37,7 +38,7 @@ func TestGetUrl(t *testing.T) {
 	}
 
 	mockedURLHandler := new(MockedURLHandler)
-	h := NewRouter(mockedURLHandler)
+	h := NewHandler(mockedURLHandler, chi.NewRouter())
 	ts := httptest.NewServer(h)
 	defer ts.Close()
 
@@ -85,7 +86,7 @@ func TestPost(t *testing.T) {
 	}
 
 	mockedURLHandler := new(MockedURLHandler)
-	h := NewRouter(mockedURLHandler)
+	h := NewHandler(mockedURLHandler, chi.NewRouter())
 	ts := httptest.NewServer(h)
 	defer ts.Close()
 

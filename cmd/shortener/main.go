@@ -4,17 +4,20 @@ import (
 	"log"
 	"net/http"
 
-	"github.com/ruskiiamov/shortener/internal/router"
-	"github.com/ruskiiamov/shortener/internal/storage"
+	"github.com/ruskiiamov/shortener/internal/chi"
+	"github.com/ruskiiamov/shortener/internal/data"
+	"github.com/ruskiiamov/shortener/internal/server"
 	"github.com/ruskiiamov/shortener/internal/url"
 )
 
 const port = ":8080"
 
 func main() {
-	urlStorage := storage.NewURLStorage()
-	urlHandler := url.NewHandler(urlStorage)
-	router := router.NewRouter(urlHandler)
+	dataKeeper := data.NewKeeper()
+	urlConverter := url.NewConverter(dataKeeper)
 
-	log.Fatal(http.ListenAndServe(port, router))
+	router := chi.NewRouter()
+	handler := server.NewHandler(urlConverter, router)
+
+	log.Fatal(http.ListenAndServe(port, handler))
 }
