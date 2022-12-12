@@ -11,13 +11,8 @@ import (
 	"github.com/ruskiiamov/shortener/internal/url"
 )
 
-const (
-	serverAddress = ":8080"
-	baseURL       = "http://localhost:8080"
-)
-
 type Config struct {
-	ServerAddress string `env:"SERVER_ADDRESS" envDefault:":8080"`
+	ServerAddress string `env:"SERVER_ADDRESS" envDefault:"localhost:8080"`
 	BaseURL       string `env:"BASE_URL" envDefault:"http://localhost:8080"`
 }
 
@@ -25,13 +20,11 @@ func main() {
 	config := Config{}
 	env.Parse(&config)
 
-	log.Println(config)
-
 	dataKeeper := data.NewKeeper()
-	urlConverter := url.NewConverter(dataKeeper, baseURL)
+	urlConverter := url.NewConverter(dataKeeper, config.BaseURL)
 
 	router := chi.NewRouter()
 	handler := server.NewHandler(urlConverter, router)
 
-	log.Fatal(http.ListenAndServe(serverAddress, handler))
+	log.Fatal(http.ListenAndServe(config.ServerAddress, handler))
 }
