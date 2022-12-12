@@ -8,10 +8,7 @@ import (
 	"github.com/go-http-utils/headers"
 )
 
-const (
-	urlScheme       = "http://"
-	applicationJSON = "application/json"
-)
+const applicationJSON = "application/json"
 
 type url struct {
 	URL string `json:"url"`
@@ -41,9 +38,7 @@ func (h *Handler) addURL(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	host := urlScheme + r.Host
-
-	shortURL, err := h.converter.Shorten(host, string(url))
+	shortURL, err := h.converter.Shorten(string(url))
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
@@ -66,9 +61,7 @@ func (h *Handler) addURLFromJSON(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	host := urlScheme + r.Host
-
-	shortURL, err := h.converter.Shorten(host, string(u.URL))
+	shortURL, err := h.converter.Shorten(string(u.URL))
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return

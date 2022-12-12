@@ -37,7 +37,7 @@ func TestGetUrl(t *testing.T) {
 		},
 	}
 
-	mockedURLHandler := new(MockedURLHandler)
+	mockedURLHandler := new(MockedConverter)
 	h := NewHandler(mockedURLHandler, chi.NewRouter())
 	ts := httptest.NewServer(h)
 	defer ts.Close()
@@ -85,14 +85,14 @@ func TestAddURL(t *testing.T) {
 		},
 	}
 
-	mockedURLHandler := new(MockedURLHandler)
+	mockedURLHandler := new(MockedConverter)
 	h := NewHandler(mockedURLHandler, chi.NewRouter())
 	ts := httptest.NewServer(h)
 	defer ts.Close()
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			mockedURLHandler.On("Shorten", ts.URL, tt.body).Return(ts.URL+tt.res, tt.err)
+			mockedURLHandler.On("Shorten", tt.body).Return(ts.URL+tt.res, tt.err)
 
 			statusCode, body, _ := testRequest(t, ts, http.MethodPost, "/", []byte(tt.body))
 
@@ -136,7 +136,7 @@ func TestAddURLFromJSON(t *testing.T) {
 		},
 	}
 
-	mockedURLHandler := new(MockedURLHandler)
+	mockedURLHandler := new(MockedConverter)
 	h := NewHandler(mockedURLHandler, chi.NewRouter())
 	ts := httptest.NewServer(h)
 	defer ts.Close()
@@ -145,7 +145,7 @@ func TestAddURLFromJSON(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			jsonBody := `{"url":"` + tt.url + `"}`
 			jsonResp := `{"result":"` + ts.URL + tt.res + `"}`
-			mockedURLHandler.On("Shorten", ts.URL, tt.url).Return(ts.URL+tt.res, tt.err)
+			mockedURLHandler.On("Shorten", tt.url).Return(ts.URL+tt.res, tt.err)
 
 			statusCode, respBody, header := testRequest(t, ts, http.MethodPost, "/api/shorten", []byte(jsonBody))
 

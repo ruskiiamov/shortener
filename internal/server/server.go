@@ -10,7 +10,7 @@ type Router interface {
 }
 
 type Converter interface {
-	Shorten(host, url string) (string, error)
+	Shorten(url string) (string, error)
 	GetOriginal(id string) (string, error)
 }
 

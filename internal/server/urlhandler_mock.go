@@ -2,16 +2,16 @@ package server
 
 import "github.com/stretchr/testify/mock"
 
-type MockedURLHandler struct {
+type MockedConverter struct {
 	mock.Mock
 }
 
-func (m *MockedURLHandler) Shorten(host, url string) (string, error) {
-	args := m.Called(host, url)
+func (m *MockedConverter) Shorten(url string) (string, error) {
+	args := m.Called(url)
 	return args.String(0), args.Error(1)
 }
 
-func (m *MockedURLHandler) GetOriginal(id string) (string, error) {
+func (m *MockedConverter) GetOriginal(id string) (string, error) {
 	args := m.Called(id)
 	return args.String(0), args.Error(1)
 }

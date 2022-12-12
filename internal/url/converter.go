@@ -12,13 +12,17 @@ type DataKeeper interface {
 
 type converter struct {
 	dataKeeper DataKeeper
+	baseURL    string
 }
 
-func NewConverter(d DataKeeper) *converter {
-	return &converter{dataKeeper: d}
+func NewConverter(d DataKeeper, baseURL string) *converter {
+	return &converter{
+		dataKeeper: d,
+		baseURL:    baseURL,
+	}
 }
 
-func (c *converter) Shorten(host, url string) (string, error) {
+func (c *converter) Shorten(url string) (string, error) {
 	originalURL := OriginalURL{URL: url}
 
 	id, err := c.dataKeeper.Add(originalURL)
@@ -26,7 +30,7 @@ func (c *converter) Shorten(host, url string) (string, error) {
 		return "", err
 	}
 
-	return host + "/" + id, nil
+	return c.baseURL + "/" + id, nil
 }
 
 func (c *converter) GetOriginal(id string) (string, error) {

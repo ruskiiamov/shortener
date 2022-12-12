@@ -45,11 +45,9 @@ func TestShorten(t *testing.T) {
 				URL: tt.args.url,
 			}).Return(tt.res, tt.err)
 
-			c := &converter{
-				dataKeeper: mockedDataKeeper,
-			}
+			c := NewConverter(mockedDataKeeper, "http://localhost:8080")
 
-			got, err := c.Shorten("http://localhost:8080", tt.args.url)
+			got, err := c.Shorten(tt.args.url)
 
 			mockedDataKeeper.AssertExpectations(t)
 
