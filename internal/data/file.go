@@ -15,10 +15,11 @@ type dataFileKeeper struct {
 
 func (d *dataFileKeeper) Add(originalURL url.OriginalURL) (id string, err error) {
 	file, err := os.OpenFile(d.filePath, os.O_CREATE|os.O_RDWR, 0777)
-	defer file.Close()
 	if err != nil {
+		file.Close()
 		return "", err
 	}
+	defer file.Close()
 
 	id, count, ok := d.getID(originalURL.URL, file)
 	if ok {
@@ -39,10 +40,11 @@ func (d *dataFileKeeper) Add(originalURL url.OriginalURL) (id string, err error)
 
 func (d *dataFileKeeper) Get(id string) (*url.OriginalURL, error) {
 	file, err := os.OpenFile(d.filePath, os.O_CREATE|os.O_RDONLY, 0777)
-	defer file.Close()
 	if err != nil {
+		file.Close()
 		return nil, err
 	}
+	defer file.Close()
 
 	fileDec := json.NewDecoder(file)
 
