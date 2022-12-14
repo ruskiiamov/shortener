@@ -7,19 +7,19 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestAdd(t *testing.T) {
+func TestMemAdd(t *testing.T) {
 	type args struct {
 		url url.OriginalURL
 	}
 	tests := []struct {
 		name    string
-		keeper  dataKeeper
+		keeper  dataMemKeeper
 		args    args
 		wantErr bool
 	}{
 		{
 			name:   "ok",
-			keeper: dataKeeper([]string{}),
+			keeper: dataMemKeeper([]string{}),
 			args: args{
 				url: url.OriginalURL{
 					URL: "http://shortener.com",
@@ -28,18 +28,8 @@ func TestAdd(t *testing.T) {
 			wantErr: false,
 		},
 		{
-			name:   "wrong url",
-			keeper: dataKeeper([]string{}),
-			args: args{
-				url: url.OriginalURL{
-					URL: "shortener.com",
-				},
-			},
-			wantErr: true,
-		},
-		{
 			name:   "repeat url",
-			keeper: dataKeeper([]string{"http://shortener.com"}),
+			keeper: dataMemKeeper([]string{"http://shortener.com"}),
 			args: args{
 				url: url.OriginalURL{
 					URL: "http://shortener.com",
@@ -63,20 +53,20 @@ func TestAdd(t *testing.T) {
 	}
 }
 
-func TestGet(t *testing.T) {
+func TestMemGet(t *testing.T) {
 	type args struct {
 		id string
 	}
 	tests := []struct {
 		name    string
-		keeper  dataKeeper
+		keeper  dataMemKeeper
 		args    args
 		want    *url.OriginalURL
 		wantErr bool
 	}{
 		{
 			name:   "ok",
-			keeper: dataKeeper([]string{"http://shortener.com"}),
+			keeper: dataMemKeeper([]string{"http://shortener.com"}),
 			args:   args{id: "0"},
 			want: &url.OriginalURL{
 				ID:  "0",
@@ -86,7 +76,7 @@ func TestGet(t *testing.T) {
 		},
 		{
 			name:   "not int id",
-			keeper: dataKeeper([]string{"http://shortener.com"}),
+			keeper: dataMemKeeper([]string{"http://shortener.com"}),
 			args:   args{id: "abc"},
 			want: &url.OriginalURL{
 				ID:  "abc",
@@ -96,7 +86,7 @@ func TestGet(t *testing.T) {
 		},
 		{
 			name:   "negative id",
-			keeper: dataKeeper([]string{"http://shortener.com"}),
+			keeper: dataMemKeeper([]string{"http://shortener.com"}),
 			args:   args{id: "-2"},
 			want: &url.OriginalURL{
 				ID:  "-2",
@@ -106,7 +96,7 @@ func TestGet(t *testing.T) {
 		},
 		{
 			name:   "too big id",
-			keeper: dataKeeper([]string{"http://shortener.com", "http://shortener.com/info"}),
+			keeper: dataMemKeeper([]string{"http://shortener.com", "http://shortener.com/info"}),
 			args:   args{id: "2"},
 			want: &url.OriginalURL{
 				ID:  "2",

@@ -12,15 +12,16 @@ import (
 )
 
 type Config struct {
-	ServerAddress string `env:"SERVER_ADDRESS" envDefault:"localhost:8080"`
-	BaseURL       string `env:"BASE_URL" envDefault:"http://localhost:8080"`
+	ServerAddress   string `env:"SERVER_ADDRESS" envDefault:"localhost:8080"`
+	BaseURL         string `env:"BASE_URL" envDefault:"http://localhost:8080"`
+	FileStoragePath string `env:"FILE_STORAGE_PATH"`
 }
 
 func main() {
 	config := Config{}
 	env.Parse(&config)
 
-	dataKeeper := data.NewKeeper()
+	dataKeeper := data.NewKeeper(config.FileStoragePath)
 	urlConverter := url.NewConverter(dataKeeper, config.BaseURL)
 
 	router := chi.NewRouter()

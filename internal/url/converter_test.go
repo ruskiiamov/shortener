@@ -41,9 +41,11 @@ func TestShorten(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			mockedDataKeeper.On("Add", OriginalURL{
-				URL: tt.args.url,
-			}).Return(tt.res, tt.err)
+			if !tt.wantErr {
+				mockedDataKeeper.On("Add", OriginalURL{
+					URL: tt.args.url,
+				}).Return(tt.res, tt.err)
+			}
 
 			c := NewConverter(mockedDataKeeper, "http://localhost:8080")
 

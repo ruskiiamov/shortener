@@ -1,8 +1,10 @@
 package url
 
+import neturl "net/url"
+
 type OriginalURL struct {
-	ID  string
-	URL string
+	ID  string `json:"id"`
+	URL string `json:"url"`
 }
 
 type DataKeeper interface {
@@ -23,6 +25,10 @@ func NewConverter(d DataKeeper, baseURL string) *converter {
 }
 
 func (c *converter) Shorten(url string) (string, error) {
+	if _, err := neturl.ParseRequestURI(url); err != nil {
+		return "", err
+	}
+
 	originalURL := OriginalURL{URL: url}
 
 	id, err := c.dataKeeper.Add(originalURL)
