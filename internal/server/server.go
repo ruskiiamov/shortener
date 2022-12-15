@@ -14,9 +14,22 @@ type Converter interface {
 	GetOriginal(id string) (string, error)
 }
 
+type Middleware func(http.HandlerFunc) http.HandlerFunc
+
+func Conveyor(h http.HandlerFunc, middlewares ...Middleware) http.HandlerFunc {
+	for _, middleware := range middlewares {
+		h = middleware(h)
+	}
+	return h
+}
+
 type Handler struct {
 	router    Router
 	converter Converter
+}
+
+func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	h.router.ServeHTTP(w, r)
 }
 
 func NewHandler(c Converter, r Router) *Handler {
@@ -25,13 +38,9 @@ func NewHandler(c Converter, r Router) *Handler {
 		converter: c,
 	}
 
-	h.router.GET("/{id}", h.getURL)
-	h.router.POST("/", h.addURL)
-	h.router.POST("/api/shorten", h.addURLFromJSON)
+	h.router.GET("/{id}", Conveyor(h.getURL, gzipCompress))
+	h.router.POST("/", Conveyor(h.addURL, gzipCompress))
+	h.router.POST("/api/shorten", Conveyor(h.addURLFromJSON, gzipCompress))
 
 	return h
-}
-
-func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	h.router.ServeHTTP(w, r)
 }
