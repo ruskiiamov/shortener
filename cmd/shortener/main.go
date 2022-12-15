@@ -4,7 +4,6 @@ import (
 	"flag"
 	"log"
 	"net/http"
-	"os"
 
 	"github.com/caarlos0/env/v6"
 	"github.com/ruskiiamov/shortener/internal/chi"
@@ -22,14 +21,11 @@ type Config struct {
 func getConfig() *Config {
 	var config Config
 
-	if len(os.Args) == 1 {
-		env.Parse(&config)
-		return &config
-	}
+	env.Parse(&config)
 
-	flag.StringVar(&config.ServerAddress, "a", "localhost:8080", "Server address")
-	flag.StringVar(&config.BaseURL, "b", "http://localhost:8080", "Base URL")
-	flag.StringVar(&config.FileStoragePath, "f", "", "File storage path")
+	flag.StringVar(&config.ServerAddress, "a", config.ServerAddress, "Server address")
+	flag.StringVar(&config.BaseURL, "b", config.BaseURL, "Base URL")
+	flag.StringVar(&config.FileStoragePath, "f", config.FileStoragePath, "File storage path")
 	flag.Parse()
 
 	return &config
