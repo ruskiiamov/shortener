@@ -12,6 +12,7 @@ import (
 const gzipEnc = "gzip"
 
 var gzw *gzip.Writer
+var gzr *gzip.Reader
 
 type gzipWriter struct {
 	http.ResponseWriter
@@ -33,9 +34,13 @@ func gzipCompress(next http.HandlerFunc) http.HandlerFunc {
 		}
 
 		if contentEncoding == gzipEnc {
-			gzr, err := gzip.NewReader(r.Body)
-			if err != nil {
-				http.Error(w, err.Error(), http.StatusInternalServerError)
+			if gzr == nil {
+				gzr, err = gzip.NewReader(r.Body)
+				if err != nil {
+					http.Error(w, err.Error(), http.StatusInternalServerError)
+				}
+			} else {
+				gzr.Reset(r.Body)
 			}
 			defer gzr.Close()
 
@@ -56,6 +61,7 @@ func gzipCompress(next http.HandlerFunc) http.HandlerFunc {
 		} else {
 			gzw.Reset(w)
 		}
+		defer gzw.Flush()
 
 		w.Header().Set(headers.ContentEncoding, gzipEnc)
 		next.ServeHTTP(gzipWriter{ResponseWriter: w, Writer: gzw}, r)
