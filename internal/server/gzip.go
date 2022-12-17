@@ -23,8 +23,8 @@ func (w gzipWriter) Write(b []byte) (int, error) {
 	return w.Writer.Write(b)
 }
 
-func gzipCompress(next http.HandlerFunc) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
+func gzipCompress(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var err error
 
 		contentEncoding := r.Header.Get(headers.ContentEncoding)
@@ -61,9 +61,9 @@ func gzipCompress(next http.HandlerFunc) http.HandlerFunc {
 		} else {
 			gzw.Reset(w)
 		}
-		defer gzw.Flush()
+		defer gzw.Close()
 
 		w.Header().Set(headers.ContentEncoding, gzipEnc)
 		next.ServeHTTP(gzipWriter{ResponseWriter: w, Writer: gzw}, r)
-	}
+	})
 }

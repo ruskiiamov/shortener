@@ -4,23 +4,15 @@ import "net/http"
 
 type Router interface {
 	http.Handler
-	GET(pattern string, handlerFn http.HandlerFunc)
-	POST(pattern string, handlerFn http.HandlerFunc)
+	GET(pattern string, handler http.Handler)
+	POST(pattern string, handler http.Handler)
 	GetURLParam(r *http.Request, key string) string
+	AddMiddlewares(middlewares ...func(http.Handler) http.Handler)
 }
 
 type Converter interface {
 	Shorten(url string) (string, error)
 	GetOriginal(id string) (string, error)
-}
-
-type Middleware func(http.HandlerFunc) http.HandlerFunc
-
-func Conveyor(h http.HandlerFunc, middlewares ...Middleware) http.HandlerFunc {
-	for _, middleware := range middlewares {
-		h = middleware(h)
-	}
-	return h
 }
 
 type Handler struct {
@@ -38,9 +30,11 @@ func NewHandler(c Converter, r Router) *Handler {
 		converter: c,
 	}
 
-	h.router.GET("/{id}", Conveyor(h.getURL, gzipCompress))
-	h.router.POST("/", Conveyor(h.addURL, gzipCompress))
-	h.router.POST("/api/shorten", Conveyor(h.addURLFromJSON, gzipCompress))
+	h.router.AddMiddlewares(gzipCompress)
+
+	h.router.GET("/{id}", h.getURL())
+	h.router.POST("/", h.addURL())
+	h.router.POST("/api/shorten", h.addURLFromJSON())
 
 	return h
 }

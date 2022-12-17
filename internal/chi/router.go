@@ -15,7 +15,6 @@ func NewRouter() *router {
 	chiMux := chi.NewMux()
 
 	chiMux.Use(middleware.Logger)
-	chiMux.Use(middleware.Recoverer)
 
 	return &router{mux: chiMux}
 }
@@ -24,14 +23,18 @@ func (rtr *router) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	rtr.mux.ServeHTTP(w, r)
 }
 
-func (rtr *router) GET(pattern string, handlerFn http.HandlerFunc) {
-	rtr.mux.Get(pattern, handlerFn)
+func (rtr *router) GET(pattern string, handler http.Handler) {
+	rtr.mux.Get(pattern, handler.ServeHTTP)
 }
 
-func (rtr *router) POST(pattern string, handlerFn http.HandlerFunc) {
-	rtr.mux.Post(pattern, handlerFn)
+func (rtr *router) POST(pattern string, handler http.Handler) {
+	rtr.mux.Post(pattern, handler.ServeHTTP)
 }
 
 func (rtr *router) GetURLParam(r *http.Request, key string) string {
 	return chi.URLParam(r, key)
+}
+
+func (rtr *router) AddMiddlewares(middlewares ...func(http.Handler) http.Handler) {
+	rtr.mux.Use(middlewares...)
 }

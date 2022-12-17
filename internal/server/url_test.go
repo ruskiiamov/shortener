@@ -37,18 +37,18 @@ func TestGetUrl(t *testing.T) {
 		},
 	}
 
-	mockedURLHandler := new(MockedConverter)
-	h := NewHandler(mockedURLHandler, chi.NewRouter())
+	mockedConverter := new(MockedConverter)
+	h := NewHandler(mockedConverter, chi.NewRouter())
 	ts := httptest.NewServer(h)
 	defer ts.Close()
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			mockedURLHandler.On("GetOriginal", tt.id).Return(tt.res, tt.err)
+			mockedConverter.On("GetOriginal", tt.id).Return(tt.res, tt.err)
 
 			statusCode, _, header := testRequest(t, ts, http.MethodGet, tt.path, nil)
 
-			mockedURLHandler.AssertExpectations(t)
+			mockedConverter.AssertExpectations(t)
 
 			if tt.wantErr {
 				assert.Equal(t, http.StatusBadRequest, statusCode)
