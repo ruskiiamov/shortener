@@ -1,20 +1,44 @@
 package main
 
 import (
+	"flag"
 	"log"
 	"net/http"
 
-	"github.com/ruskiiamov/shortener/internal/router"
-	"github.com/ruskiiamov/shortener/internal/storage"
+	"github.com/caarlos0/env/v6"
+	"github.com/ruskiiamov/shortener/internal/chi"
+	"github.com/ruskiiamov/shortener/internal/data"
+	"github.com/ruskiiamov/shortener/internal/server"
 	"github.com/ruskiiamov/shortener/internal/url"
 )
 
-const port = ":8080"
+type Config struct {
+	ServerAddress   string `env:"SERVER_ADDRESS" envDefault:"localhost:8080"`
+	BaseURL         string `env:"BASE_URL" envDefault:"http://localhost:8080"`
+	FileStoragePath string `env:"FILE_STORAGE_PATH"`
+}
+
+func getConfig() *Config {
+	var config Config
+
+	env.Parse(&config)
+
+	flag.StringVar(&config.ServerAddress, "a", config.ServerAddress, "Server address")
+	flag.StringVar(&config.BaseURL, "b", config.BaseURL, "Base URL")
+	flag.StringVar(&config.FileStoragePath, "f", config.FileStoragePath, "File storage path")
+	flag.Parse()
+
+	return &config
+}
 
 func main() {
-	urlStorage := storage.NewURLStorage()
-	urlHandler := url.NewHandler(urlStorage)
-	router := router.NewRouter(urlHandler)
+	config := getConfig()
 
-	log.Fatal(http.ListenAndServe(port, router))
+	dataKeeper := data.NewKeeper(config.FileStoragePath)
+	urlConverter := url.NewConverter(dataKeeper, config.BaseURL)
+
+	router := chi.NewRouter()
+	handler := server.NewHandler(urlConverter, router)
+
+	log.Fatal(http.ListenAndServe(config.ServerAddress, handler))
 }

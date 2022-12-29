@@ -1,4 +1,4 @@
-package router
+package server
 
 import (
 	"errors"
@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/ruskiiamov/shortener/internal/chi"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -36,18 +37,18 @@ func TestGetUrl(t *testing.T) {
 		},
 	}
 
-	mockedURLHandler := new(MockedURLHandler)
-	h := NewRouter(mockedURLHandler)
+	mockedConverter := new(MockedConverter)
+	h := NewHandler(mockedConverter, chi.NewRouter())
 	ts := httptest.NewServer(h)
 	defer ts.Close()
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			mockedURLHandler.On("GetOriginal", tt.id).Return(tt.res, tt.err)
+			mockedConverter.On("GetOriginal", tt.id).Return(tt.res, tt.err)
 
 			statusCode, _, header := testRequest(t, ts, http.MethodGet, tt.path, nil)
 
-			mockedURLHandler.AssertExpectations(t)
+			mockedConverter.AssertExpectations(t)
 
 			if tt.wantErr {
 				assert.Equal(t, http.StatusBadRequest, statusCode)
@@ -60,7 +61,7 @@ func TestGetUrl(t *testing.T) {
 	}
 }
 
-func TestPost(t *testing.T) {
+func TestAddURL(t *testing.T) {
 	tests := []struct {
 		name    string
 		body    string
@@ -84,14 +85,14 @@ func TestPost(t *testing.T) {
 		},
 	}
 
-	mockedURLHandler := new(MockedURLHandler)
-	h := NewRouter(mockedURLHandler)
+	mockedURLHandler := new(MockedConverter)
+	h := NewHandler(mockedURLHandler, chi.NewRouter())
 	ts := httptest.NewServer(h)
 	defer ts.Close()
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			mockedURLHandler.On("Shorten", ts.URL, tt.body).Return(ts.URL+tt.res, tt.err)
+			mockedURLHandler.On("Shorten", tt.body).Return(ts.URL+tt.res, tt.err)
 
 			statusCode, body, _ := testRequest(t, ts, http.MethodPost, "/", []byte(tt.body))
 
@@ -104,6 +105,60 @@ func TestPost(t *testing.T) {
 
 			assert.Equal(t, http.StatusCreated, statusCode)
 			assert.Equal(t, ts.URL+tt.res, string(body))
+		})
+	}
+}
+
+func TestAddURLFromJSON(t *testing.T) {
+	tests := []struct {
+		name    string
+		url     string
+		res     string
+		cType   string
+		err     error
+		wantErr bool
+	}{
+		{
+			name:    "ok",
+			url:     "http://shortener.com",
+			res:     "/0",
+			cType:   "application/json",
+			err:     nil,
+			wantErr: false,
+		},
+		{
+			name:    "not ok",
+			url:     "shortener.com",
+			res:     "",
+			cType:   "",
+			err:     errors.New("wrong url"),
+			wantErr: true,
+		},
+	}
+
+	mockedURLHandler := new(MockedConverter)
+	h := NewHandler(mockedURLHandler, chi.NewRouter())
+	ts := httptest.NewServer(h)
+	defer ts.Close()
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			jsonBody := `{"url":"` + tt.url + `"}`
+			jsonResp := `{"result":"` + ts.URL + tt.res + `"}`
+			mockedURLHandler.On("Shorten", tt.url).Return(ts.URL+tt.res, tt.err)
+
+			statusCode, respBody, header := testRequest(t, ts, http.MethodPost, "/api/shorten", []byte(jsonBody))
+
+			mockedURLHandler.AssertExpectations(t)
+
+			if tt.wantErr {
+				assert.Equal(t, http.StatusBadRequest, statusCode)
+				return
+			}
+
+			assert.Equal(t, http.StatusCreated, statusCode)
+			assert.Equal(t, tt.cType, header.Get("Content-Type"))
+			assert.Equal(t, jsonResp, string(respBody))
 		})
 	}
 }

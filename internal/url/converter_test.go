@@ -37,21 +37,21 @@ func TestShorten(t *testing.T) {
 		},
 	}
 
-	mockedStorage := new(MockedStorage)
+	mockedDataKeeper := new(MockedDataKeeper)
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			mockedStorage.On("Add", OriginalURL{
-				URL: tt.args.url,
-			}).Return(tt.res, tt.err)
-
-			h := &handler{
-				storage: mockedStorage,
+			if !tt.wantErr {
+				mockedDataKeeper.On("Add", OriginalURL{
+					URL: tt.args.url,
+				}).Return(tt.res, tt.err)
 			}
 
-			got, err := h.Shorten("http://localhost:8080", tt.args.url)
+			c := NewConverter(mockedDataKeeper, "http://localhost:8080")
 
-			mockedStorage.AssertExpectations(t)
+			got, err := c.Shorten(tt.args.url)
+
+			mockedDataKeeper.AssertExpectations(t)
 
 			if tt.wantErr {
 				assert.NotNil(t, err)
@@ -95,17 +95,17 @@ func TestGetOriginal(t *testing.T) {
 		},
 	}
 
-	mockedStorage := new(MockedStorage)
+	mockedDataKeeper := new(MockedDataKeeper)
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			mockedStorage.On("Get", tt.args.id).Return(tt.res, tt.err)
+			mockedDataKeeper.On("Get", tt.args.id).Return(tt.res, tt.err)
 
-			h := &handler{
-				storage: mockedStorage,
+			c := &converter{
+				dataKeeper: mockedDataKeeper,
 			}
 
-			got, err := h.GetOriginal(tt.args.id)
+			got, err := c.GetOriginal(tt.args.id)
 
 			if tt.wantErr {
 				assert.NotNil(t, err)
