@@ -7,17 +7,17 @@ import (
 	"github.com/ruskiiamov/shortener/internal/url"
 )
 
-type dataMemKeeper []string
+type dataMemKeeper []url.OriginalURL
 
 func (d *dataMemKeeper) Add(originalURL url.OriginalURL) (id string, err error) {
-	if id, ok := d.getID(originalURL.URL); ok {
+	if id, ok := d.getID(originalURL); ok {
 		return strconv.Itoa(id), nil
 	}
 
-	id = strconv.Itoa(len(*d))
-	*d = append(*d, originalURL.URL)
+	originalURL.ID = strconv.Itoa(len(*d))
+	*d = append(*d, originalURL)
 
-	return id, nil
+	return originalURL.ID, nil
 }
 
 func (d *dataMemKeeper) Get(id string) (*url.OriginalURL, error) {
@@ -30,17 +30,26 @@ func (d *dataMemKeeper) Get(id string) (*url.OriginalURL, error) {
 		return nil, errors.New("wrong id")
 	}
 
-	originalURL := &url.OriginalURL{
-		ID:  id,
-		URL: (*d)[intID],
-	}
+	originalURL := &(*d)[intID]
 
 	return originalURL, nil
 }
 
-func (d *dataMemKeeper) getID(url string) (int, bool) {
+func (d *dataMemKeeper) GetAllByUser(userID string) ([]url.OriginalURL, error) {
+	var res []url.OriginalURL
+
+	for _, originalURL := range *d {
+		if originalURL.UserID == userID {
+			res = append(res, originalURL)
+		}
+	}
+
+	return res, nil
+}
+
+func (d *dataMemKeeper) getID(url url.OriginalURL) (int, bool) {
 	for id, originalURL := range *d {
-		if originalURL == url {
+		if originalURL.URL == url.URL && originalURL.UserID == url.UserID {
 			return id, true
 		}
 	}

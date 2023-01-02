@@ -25,7 +25,8 @@ func TestFileAdd(t *testing.T) {
 			fileData:   "",
 			keeper:     NewKeeper("test_data_file"),
 			url: url.OriginalURL{
-				URL: "https://very-long-url.com",
+				URL:    "https://very-long-url.com",
+				UserID: "e01a511c-bfaa-4f4e-80f9-e3f07f8664ee",
 			},
 			want: "0",
 		},
@@ -33,10 +34,12 @@ func TestFileAdd(t *testing.T) {
 			name:       "repeat url",
 			filePath:   "test_data_file",
 			fileExists: true,
-			fileData:   `{"id":"0","url":"https://very-long-url-0.com"}` + "\n" + `{"id":"1","url":"https://very-long-url-1.com"}`,
-			keeper:     NewKeeper("test_data_file"),
+			fileData: `{"id":"0","url":"https://very-long-url-0.com","user_id":"e01a511c-bfaa-4f4e-80f9-e3f07f8664ee"}` +
+				"\n" + `{"id":"1","url":"https://very-long-url-1.com","user_id":"1930751f-6252-4892-95de-ef528eabeb39"}`,
+			keeper: NewKeeper("test_data_file"),
 			url: url.OriginalURL{
-				URL: "https://very-long-url-1.com",
+				URL:    "https://very-long-url-1.com",
+				UserID: "1930751f-6252-4892-95de-ef528eabeb39",
 			},
 			want: "1",
 		},
@@ -74,23 +77,25 @@ func TestFileGet(t *testing.T) {
 		{
 			name:     "ok",
 			filePath: "test_data_file",
-			fileData: `{"id":"0","url":"https://very-long-url.com"}`,
+			fileData: `{"id":"0","url":"https://very-long-url.com","user_id":"f940c007-496f-4507-b41f-3cd43d7e7286"}`,
 			keeper:   NewKeeper("test_data_file"),
 			id:       "0",
 			want: &url.OriginalURL{
-				ID:  "0",
-				URL: "https://very-long-url.com",
+				ID:     "0",
+				URL:    "https://very-long-url.com",
+				UserID: "f940c007-496f-4507-b41f-3cd43d7e7286",
 			},
 			wantErr: false,
 		},
 		{
 			name:     "not found",
 			filePath: "test_data_file",
-			fileData: `{"id":"0","url":"https://very-long-url-0.com"}` + "\n" + `{"id":"1","url":"https://very-long-url-1.com"}`,
-			keeper:   NewKeeper("test_data_file"),
-			id:       "2",
-			want:     nil,
-			wantErr:  true,
+			fileData: `{"id":"0","url":"https://very-long-url-0.com","user_id":"f940c007-496f-4507-b41f-3cd43d7e7286"}` +
+				"\n" + `{"id":"1","url":"https://very-long-url-1.com","user_id":"e01a511c-bfaa-4f4e-80f9-e3f07f8664ee"}`,
+			keeper:  NewKeeper("test_data_file"),
+			id:      "2",
+			want:    nil,
+			wantErr: true,
 		},
 	}
 	for _, tt := range tests {
@@ -108,6 +113,55 @@ func TestFileGet(t *testing.T) {
 				assert.Error(t, err)
 				return
 			}
+
+			assert.NoError(t, err)
+			assert.Equal(t, tt.want, got)
+		})
+	}
+}
+
+func TestFileGetAllByUser(t *testing.T) {
+	tests := []struct {
+		name     string
+		filePath string
+		fileData string
+		keeper   url.DataKeeper
+		userID   string
+		want     []url.OriginalURL
+		wantErr  bool
+	}{
+		{
+			name:     "ok",
+			filePath: "test_data_file",
+			fileData: `{"id":"0","url":"https://very-long-url-0.com","user_id":"f940c007-496f-4507-b41f-3cd43d7e7286"}` +
+				"\n" + `{"id":"1","url":"https://very-long-url-1.com","user_id":"e01a511c-bfaa-4f4e-80f9-e3f07f8664ee"}` +
+				"\n" + `{"id":"2","url":"https://very-long-url-2.com","user_id":"f940c007-496f-4507-b41f-3cd43d7e7286"}`,
+			keeper: NewKeeper("test_data_file"),
+			userID: "f940c007-496f-4507-b41f-3cd43d7e7286",
+			want: []url.OriginalURL{
+				{
+					ID:     "0",
+					URL:    "https://very-long-url-0.com",
+					UserID: "f940c007-496f-4507-b41f-3cd43d7e7286",
+				},
+				{
+					ID:     "2",
+					URL:    "https://very-long-url-2.com",
+					UserID: "f940c007-496f-4507-b41f-3cd43d7e7286",
+				},
+			},
+			wantErr: false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			file, _ := os.Create(tt.filePath)
+			file.Write([]byte(tt.fileData))
+			file.Close()
+
+			got, err := tt.keeper.GetAllByUser(tt.userID)
+
+			os.Remove(tt.filePath)
 
 			assert.NoError(t, err)
 			assert.Equal(t, tt.want, got)

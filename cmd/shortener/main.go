@@ -16,6 +16,7 @@ type Config struct {
 	ServerAddress   string `env:"SERVER_ADDRESS" envDefault:"localhost:8080"`
 	BaseURL         string `env:"BASE_URL" envDefault:"http://localhost:8080"`
 	FileStoragePath string `env:"FILE_STORAGE_PATH"`
+	AuthSignKey     string `env:"AUTH_SIGN_KEY" envDefault:"secret_key"`
 }
 
 func getConfig() *Config {
@@ -26,6 +27,7 @@ func getConfig() *Config {
 	flag.StringVar(&config.ServerAddress, "a", config.ServerAddress, "Server address")
 	flag.StringVar(&config.BaseURL, "b", config.BaseURL, "Base URL")
 	flag.StringVar(&config.FileStoragePath, "f", config.FileStoragePath, "File storage path")
+	flag.StringVar(&config.AuthSignKey, "s", config.AuthSignKey, "Auth sign key")
 	flag.Parse()
 
 	return &config
@@ -38,7 +40,7 @@ func main() {
 	urlConverter := url.NewConverter(dataKeeper, config.BaseURL)
 
 	router := chi.NewRouter()
-	handler := server.NewHandler(urlConverter, router)
+	handler := server.NewHandler(urlConverter, router, config.AuthSignKey)
 
 	log.Fatal(http.ListenAndServe(config.ServerAddress, handler))
 }

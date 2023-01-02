@@ -10,19 +10,19 @@ import (
 
 const applicationJSON = "application/json"
 
-type url struct {
+type requestData struct {
 	URL string `json:"url"`
 }
 
-type result struct {
+type responseData struct {
 	Result string `json:"result"`
 }
 
-func (h *Handler) getURL() http.HandlerFunc {
+func (h *handler) getURL() http.HandlerFunc {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		id := h.router.GetURLParam(r, "id")
 
-		originalURL, err := h.converter.GetOriginal(id)
+		originalURL, err := h.urlConverter.GetOriginal(id)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
@@ -33,7 +33,7 @@ func (h *Handler) getURL() http.HandlerFunc {
 	})
 }
 
-func (h *Handler) addURL() http.HandlerFunc {
+func (h *handler) addURL() http.HandlerFunc {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		url, err := io.ReadAll(r.Body)
 		if err != nil {
@@ -41,7 +41,13 @@ func (h *Handler) addURL() http.HandlerFunc {
 			return
 		}
 
-		shortURL, err := h.converter.Shorten(string(url))
+		userID, err := r.Cookie(userIDCookieName)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		shortURL, err := h.urlConverter.Shorten(string(url), userID.Value)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
@@ -52,7 +58,7 @@ func (h *Handler) addURL() http.HandlerFunc {
 	})
 }
 
-func (h *Handler) addURLFromJSON() http.HandlerFunc {
+func (h *handler) addURLFromJSON() http.HandlerFunc {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		body, err := io.ReadAll(r.Body)
 		if err != nil {
@@ -60,20 +66,26 @@ func (h *Handler) addURLFromJSON() http.HandlerFunc {
 			return
 		}
 
-		u := new(url)
-		if err := json.Unmarshal(body, u); err != nil {
+		reqData := new(requestData)
+		if err := json.Unmarshal(body, reqData); err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
 
-		shortURL, err := h.converter.Shorten(string(u.URL))
+		userID, err := r.Cookie(userIDCookieName)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		shortURL, err := h.urlConverter.Shorten(reqData.URL, userID.Value)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
 
-		res := result{shortURL}
-		jsonRes, err := json.Marshal(res)
+		resData := responseData{shortURL}
+		jsonRes, err := json.Marshal(resData)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
@@ -81,6 +93,37 @@ func (h *Handler) addURLFromJSON() http.HandlerFunc {
 
 		w.Header().Add(headers.ContentType, applicationJSON)
 		w.WriteHeader(http.StatusCreated)
+		w.Write(jsonRes)
+	})
+}
+
+func (h *handler) getAllURL() http.HandlerFunc {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		userID, err := r.Cookie(userIDCookieName)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		urls, err := h.urlConverter.GetAll(userID.Value)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		if len(urls) == 0 {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+
+		jsonRes, err := json.Marshal(urls)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		w.Header().Add(headers.ContentType, applicationJSON)
+		w.WriteHeader(http.StatusOK)
 		w.Write(jsonRes)
 	})
 }

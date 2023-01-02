@@ -21,7 +21,7 @@ func (d *dataFileKeeper) Add(originalURL url.OriginalURL) (id string, err error)
 	}
 	defer file.Close()
 
-	id, count, ok := d.getID(originalURL.URL, file)
+	id, count, ok := d.getID(originalURL, file)
 	if ok {
 		return id, nil
 	}
@@ -62,7 +62,29 @@ func (d *dataFileKeeper) Get(id string) (*url.OriginalURL, error) {
 	}
 }
 
-func (d *dataFileKeeper) getID(originalURL string, file *os.File) (string, int, bool) {
+func (d *dataFileKeeper) GetAllByUser(userID string) ([]url.OriginalURL, error) {
+	file, err := os.OpenFile(d.filePath, os.O_CREATE|os.O_RDONLY, 0777)
+	if err != nil {
+		file.Close()
+		return nil, err
+	}
+	defer file.Close()
+
+	fileDec := json.NewDecoder(file)
+
+	var res []url.OriginalURL
+	var url url.OriginalURL
+
+	for fileDec.Decode(&url) == nil {
+		if url.UserID == userID {
+			res = append(res, url)
+		}
+	}
+
+	return res, nil
+}
+
+func (d *dataFileKeeper) getID(originalURL url.OriginalURL, file *os.File) (string, int, bool) {
 	fileDec := json.NewDecoder(file)
 
 	var url url.OriginalURL
@@ -74,7 +96,7 @@ func (d *dataFileKeeper) getID(originalURL string, file *os.File) (string, int, 
 			return "", count, false
 		}
 
-		if url.URL == originalURL {
+		if url.URL == originalURL.URL && url.UserID == originalURL.UserID {
 			return url.ID, count, true
 		}
 

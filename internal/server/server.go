@@ -1,6 +1,10 @@
 package server
 
-import "net/http"
+import (
+	"net/http"
+
+	"github.com/ruskiiamov/shortener/internal/url"
+)
 
 type Router interface {
 	http.Handler
@@ -10,31 +14,28 @@ type Router interface {
 	AddMiddlewares(middlewares ...func(http.Handler) http.Handler)
 }
 
-type Converter interface {
-	Shorten(url string) (string, error)
-	GetOriginal(id string) (string, error)
+type handler struct {
+	router       Router
+	urlConverter url.Converter
 }
 
-type Handler struct {
-	router    Router
-	converter Converter
-}
-
-func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	h.router.ServeHTTP(w, r)
 }
 
-func NewHandler(c Converter, r Router) *Handler {
-	h := &Handler{
-		router:    r,
-		converter: c,
+func NewHandler(u url.Converter, r Router, signKey string) *handler {
+	h := &handler{
+		router:       r,
+		urlConverter: u,
 	}
 
-	h.router.AddMiddlewares(gzipCompress)
+	initAuth(signKey)
+	h.router.AddMiddlewares(gzipCompress, auth)
 
 	h.router.GET("/{id}", h.getURL())
 	h.router.POST("/", h.addURL())
 	h.router.POST("/api/shorten", h.addURLFromJSON())
+	h.router.GET("/api/user/urls", h.getAllURL())
 
 	return h
 }
