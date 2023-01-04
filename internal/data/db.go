@@ -34,7 +34,7 @@ func tableDoesntExist(db *sql.DB) bool {
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 	defer cancel()
 
-	_, err := db.QueryContext(ctx, "SELECT * FROM urls LIMIT 1;")
+	err := db.QueryRowContext(ctx, "SELECT * FROM urls LIMIT 1;").Err()
 
 	return err != nil
 }

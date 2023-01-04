@@ -17,7 +17,7 @@ type Config struct {
 	BaseURL         string `env:"BASE_URL" envDefault:"http://localhost:8080"`
 	FileStoragePath string `env:"FILE_STORAGE_PATH"`
 	AuthSignKey     string `env:"AUTH_SIGN_KEY" envDefault:"secret_key"`
-	DatabaseDSN     string `env:"DATABASE_DSN" envDefault:"user=root password=root host=localhost port=54320 database=shortener"`
+	DatabaseDSN     string `env:"DATABASE_DSN"`
 }
 
 func getConfig() *Config {
