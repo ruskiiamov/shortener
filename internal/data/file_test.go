@@ -14,7 +14,6 @@ func TestFileAdd(t *testing.T) {
 		filePath   string
 		fileData   string
 		fileExists bool
-		keeper     url.DataKeeper
 		url        url.OriginalURL
 		want       string
 	}{
@@ -23,7 +22,6 @@ func TestFileAdd(t *testing.T) {
 			filePath:   "test_data_file",
 			fileExists: false,
 			fileData:   "",
-			keeper:     NewKeeper("test_data_file"),
 			url: url.OriginalURL{
 				URL:    "https://very-long-url.com",
 				UserID: "e01a511c-bfaa-4f4e-80f9-e3f07f8664ee",
@@ -36,7 +34,6 @@ func TestFileAdd(t *testing.T) {
 			fileExists: true,
 			fileData: `{"id":"0","url":"https://very-long-url-0.com","user_id":"e01a511c-bfaa-4f4e-80f9-e3f07f8664ee"}` +
 				"\n" + `{"id":"1","url":"https://very-long-url-1.com","user_id":"1930751f-6252-4892-95de-ef528eabeb39"}`,
-			keeper: NewKeeper("test_data_file"),
 			url: url.OriginalURL{
 				URL:    "https://very-long-url-1.com",
 				UserID: "1930751f-6252-4892-95de-ef528eabeb39",
@@ -52,7 +49,8 @@ func TestFileAdd(t *testing.T) {
 				file.Close()
 			}
 
-			got, err := tt.keeper.Add(tt.url)
+			keeper, _ := NewKeeper("", tt.filePath)
+			got, err := keeper.Add(tt.url)
 
 			assert.NoError(t, err)
 			assert.Equal(t, tt.want, got)
@@ -69,7 +67,6 @@ func TestFileGet(t *testing.T) {
 		name     string
 		filePath string
 		fileData string
-		keeper   url.DataKeeper
 		id       string
 		want     *url.OriginalURL
 		wantErr  bool
@@ -78,7 +75,6 @@ func TestFileGet(t *testing.T) {
 			name:     "ok",
 			filePath: "test_data_file",
 			fileData: `{"id":"0","url":"https://very-long-url.com","user_id":"f940c007-496f-4507-b41f-3cd43d7e7286"}`,
-			keeper:   NewKeeper("test_data_file"),
 			id:       "0",
 			want: &url.OriginalURL{
 				ID:     "0",
@@ -92,7 +88,6 @@ func TestFileGet(t *testing.T) {
 			filePath: "test_data_file",
 			fileData: `{"id":"0","url":"https://very-long-url-0.com","user_id":"f940c007-496f-4507-b41f-3cd43d7e7286"}` +
 				"\n" + `{"id":"1","url":"https://very-long-url-1.com","user_id":"e01a511c-bfaa-4f4e-80f9-e3f07f8664ee"}`,
-			keeper:  NewKeeper("test_data_file"),
 			id:      "2",
 			want:    nil,
 			wantErr: true,
@@ -104,7 +99,8 @@ func TestFileGet(t *testing.T) {
 			file.Write([]byte(tt.fileData))
 			file.Close()
 
-			got, err := tt.keeper.Get(tt.id)
+			keeper, _ := NewKeeper("", tt.filePath)
+			got, err := keeper.Get(tt.id)
 
 			os.Remove(tt.filePath)
 
@@ -125,7 +121,6 @@ func TestFileGetAllByUser(t *testing.T) {
 		name     string
 		filePath string
 		fileData string
-		keeper   url.DataKeeper
 		userID   string
 		want     []url.OriginalURL
 		wantErr  bool
@@ -136,7 +131,6 @@ func TestFileGetAllByUser(t *testing.T) {
 			fileData: `{"id":"0","url":"https://very-long-url-0.com","user_id":"f940c007-496f-4507-b41f-3cd43d7e7286"}` +
 				"\n" + `{"id":"1","url":"https://very-long-url-1.com","user_id":"e01a511c-bfaa-4f4e-80f9-e3f07f8664ee"}` +
 				"\n" + `{"id":"2","url":"https://very-long-url-2.com","user_id":"f940c007-496f-4507-b41f-3cd43d7e7286"}`,
-			keeper: NewKeeper("test_data_file"),
 			userID: "f940c007-496f-4507-b41f-3cd43d7e7286",
 			want: []url.OriginalURL{
 				{
@@ -159,7 +153,8 @@ func TestFileGetAllByUser(t *testing.T) {
 			file.Write([]byte(tt.fileData))
 			file.Close()
 
-			got, err := tt.keeper.GetAllByUser(tt.userID)
+			keeper, _ := NewKeeper("", tt.filePath)
+			got, err := keeper.GetAllByUser(tt.userID)
 
 			os.Remove(tt.filePath)
 

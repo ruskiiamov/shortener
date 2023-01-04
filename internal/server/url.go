@@ -127,3 +127,14 @@ func (h *handler) getAllURL() http.HandlerFunc {
 		w.Write(jsonRes)
 	})
 }
+
+func (h *handler) pingDB() http.HandlerFunc {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if err := h.urlConverter.PingDB(); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		w.WriteHeader(http.StatusOK)
+	})
+}

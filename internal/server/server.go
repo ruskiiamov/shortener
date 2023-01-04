@@ -1,7 +1,6 @@
 package server
 
 import (
-	"database/sql"
 	"net/http"
 
 	"github.com/ruskiiamov/shortener/internal/url"
@@ -18,18 +17,16 @@ type Router interface {
 type handler struct {
 	router       Router
 	urlConverter url.Converter
-	db           *sql.DB
 }
 
 func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	h.router.ServeHTTP(w, r)
 }
 
-func NewHandler(u url.Converter, r Router, db *sql.DB, signKey string) *handler {
+func NewHandler(u url.Converter, r Router, signKey string) *handler {
 	h := &handler{
 		router:       r,
 		urlConverter: u,
-		db:           db,
 	}
 
 	initAuth(signKey)
@@ -39,7 +36,6 @@ func NewHandler(u url.Converter, r Router, db *sql.DB, signKey string) *handler 
 	h.router.POST("/", h.addURL())
 	h.router.POST("/api/shorten", h.addURLFromJSON())
 	h.router.GET("/api/user/urls", h.getAllURL())
-
 	h.router.GET("/ping", h.pingDB())
 
 	return h

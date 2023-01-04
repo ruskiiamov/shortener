@@ -128,23 +128,23 @@ func TestGetAll(t *testing.T) {
 			name:   "ok",
 			userID: "21f923fc-cbbf-4fb1-a05c-21933d307be2",
 			want: []URL{
-				URL{
+				{
 					ShortURL:    "http://localhost:8080/1",
 					OriginalURL: "http://shortener.com",
 				},
-				URL{
+				{
 					ShortURL:    "http://localhost:8080/3",
 					OriginalURL: "http://shortener.ru",
 				},
 			},
 			wantErr: false,
 			res: []OriginalURL{
-				OriginalURL{
+				{
 					ID:     "1",
 					URL:    "http://shortener.com",
 					UserID: "21f923fc-cbbf-4fb1-a05c-21933d307be2",
 				},
-				OriginalURL{
+				{
 					ID:     "3",
 					URL:    "http://shortener.ru",
 					UserID: "21f923fc-cbbf-4fb1-a05c-21933d307be2",

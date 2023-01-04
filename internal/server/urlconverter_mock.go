@@ -23,3 +23,8 @@ func (m *mockedConverter) GetAll(userID string) ([]url.URL, error) {
 	args := m.Called(userID)
 	return args.Get(0).([]url.URL), args.Error(1)
 }
+
+func (m *mockedConverter) PingDB() error {
+	args := m.Called()
+	return args.Error(0)
+}

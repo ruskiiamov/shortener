@@ -7,38 +7,42 @@ import (
 	"github.com/ruskiiamov/shortener/internal/url"
 )
 
-type dataMemKeeper []url.OriginalURL
+type memKeeper []url.OriginalURL
 
-func (d *dataMemKeeper) Add(originalURL url.OriginalURL) (id string, err error) {
-	if id, ok := d.getID(originalURL); ok {
+func newMemKeeper() url.DataKeeper {
+	return new(memKeeper)
+}
+
+func (m *memKeeper) Add(originalURL url.OriginalURL) (id string, err error) {
+	if id, ok := m.getID(originalURL); ok {
 		return strconv.Itoa(id), nil
 	}
 
-	originalURL.ID = strconv.Itoa(len(*d))
-	*d = append(*d, originalURL)
+	originalURL.ID = strconv.Itoa(len(*m))
+	*m = append(*m, originalURL)
 
 	return originalURL.ID, nil
 }
 
-func (d *dataMemKeeper) Get(id string) (*url.OriginalURL, error) {
+func (m *memKeeper) Get(id string) (*url.OriginalURL, error) {
 	intID, err := strconv.Atoi(id)
 	if err != nil {
 		return nil, errors.New("wrong id")
 	}
 
-	if intID < 0 || intID >= len(*d) {
+	if intID < 0 || intID >= len(*m) {
 		return nil, errors.New("wrong id")
 	}
 
-	originalURL := &(*d)[intID]
+	originalURL := &(*m)[intID]
 
 	return originalURL, nil
 }
 
-func (d *dataMemKeeper) GetAllByUser(userID string) ([]url.OriginalURL, error) {
-	var res []url.OriginalURL
+func (m *memKeeper) GetAllByUser(userID string) ([]url.OriginalURL, error) {
+	res := make([]url.OriginalURL, 0)
 
-	for _, originalURL := range *d {
+	for _, originalURL := range *m {
 		if originalURL.UserID == userID {
 			res = append(res, originalURL)
 		}
@@ -47,8 +51,14 @@ func (d *dataMemKeeper) GetAllByUser(userID string) ([]url.OriginalURL, error) {
 	return res, nil
 }
 
-func (d *dataMemKeeper) getID(url url.OriginalURL) (int, bool) {
-	for id, originalURL := range *d {
+func (m *memKeeper) PingDB() error {
+	return errors.New("memory data keeper is used")
+}
+
+func (m *memKeeper) Close() {}
+
+func (m *memKeeper) getID(url url.OriginalURL) (int, bool) {
+	for id, originalURL := range *m {
 		if originalURL.URL == url.URL && originalURL.UserID == url.UserID {
 			return id, true
 		}

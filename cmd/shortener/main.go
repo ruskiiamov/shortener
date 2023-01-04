@@ -17,7 +17,7 @@ type Config struct {
 	BaseURL         string `env:"BASE_URL" envDefault:"http://localhost:8080"`
 	FileStoragePath string `env:"FILE_STORAGE_PATH"`
 	AuthSignKey     string `env:"AUTH_SIGN_KEY" envDefault:"secret_key"`
-	DatabaseDSN     string `env:"DATABASE_DSN" envDefault:"user=root password=root host=localhost port=54320 database=postgres"`
+	DatabaseDSN     string `env:"DATABASE_DSN" envDefault:"user=root password=root host=localhost port=54320 database=shortener"`
 }
 
 func getConfig() *Config {
@@ -38,17 +38,16 @@ func getConfig() *Config {
 func main() {
 	config := getConfig()
 
-	dataKeeper := data.NewKeeper(config.FileStoragePath)
-	urlConverter := url.NewConverter(dataKeeper, config.BaseURL)
-
-	db, err := data.NewDB(config.DatabaseDSN)
+	dataKeeper, err := data.NewKeeper(config.DatabaseDSN, config.FileStoragePath)
 	if err != nil {
 		log.Fatal(err)
 	}
-	defer db.Close()
+	defer dataKeeper.Close()
+
+	urlConverter := url.NewConverter(dataKeeper, config.BaseURL)
 
 	router := chi.NewRouter()
-	handler := server.NewHandler(urlConverter, router, db, config.AuthSignKey)
+	handler := server.NewHandler(urlConverter, router, config.AuthSignKey)
 
 	log.Fatal(http.ListenAndServe(config.ServerAddress, handler))
 }

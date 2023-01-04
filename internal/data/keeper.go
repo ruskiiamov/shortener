@@ -2,10 +2,13 @@ package data
 
 import "github.com/ruskiiamov/shortener/internal/url"
 
-func NewKeeper(filePath string) url.DataKeeper {
-	if filePath == "" {
-		return new(dataMemKeeper)
+func NewKeeper(databaseDSN, filePath string) (url.DataKeeper, error) {
+	switch {
+	case databaseDSN != "":
+		return newDBKeeper(databaseDSN)
+	case filePath != "":
+		return newFileKeeper(filePath), nil
+	default:
+		return newMemKeeper(), nil
 	}
-
-	return &dataFileKeeper{filePath: filePath}
 }

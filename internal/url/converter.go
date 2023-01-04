@@ -17,12 +17,15 @@ type DataKeeper interface {
 	Add(OriginalURL) (id string, err error)
 	Get(id string) (*OriginalURL, error)
 	GetAllByUser(userID string) ([]OriginalURL, error)
+	PingDB() error
+	Close()
 }
 
 type Converter interface {
 	Shorten(url, userID string) (string, error)
 	GetOriginal(id string) (string, error)
 	GetAll(userID string) ([]URL, error)
+	PingDB() error
 }
 
 type converter struct {
@@ -77,4 +80,8 @@ func (c *converter) GetAll(userID string) ([]URL, error) {
 	}
 
 	return res, nil
+}
+
+func (c *converter) PingDB() error {
+	return c.dataKeeper.PingDB()
 }

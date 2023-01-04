@@ -10,13 +10,13 @@ import (
 func TestMemAdd(t *testing.T) {
 	tests := []struct {
 		name    string
-		keeper  dataMemKeeper
+		keeper  memKeeper
 		url     url.OriginalURL
 		wantErr bool
 	}{
 		{
 			name:   "ok",
-			keeper: dataMemKeeper{},
+			keeper: memKeeper{},
 			url: url.OriginalURL{
 				URL:    "http://shortener.com",
 				UserID: "1770aae6-caaf-4578-b27e-ffa967927a1b",
@@ -25,7 +25,7 @@ func TestMemAdd(t *testing.T) {
 		},
 		{
 			name: "repeat url",
-			keeper: dataMemKeeper{url.OriginalURL{
+			keeper: memKeeper{url.OriginalURL{
 				URL:    "http://shortener.com",
 				UserID: "c7cbe16d-034e-40b9-a2a5-e936851c4282",
 			}},
@@ -54,14 +54,14 @@ func TestMemAdd(t *testing.T) {
 func TestMemGet(t *testing.T) {
 	tests := []struct {
 		name    string
-		keeper  dataMemKeeper
+		keeper  memKeeper
 		id      string
 		want    *url.OriginalURL
 		wantErr bool
 	}{
 		{
 			name: "ok",
-			keeper: dataMemKeeper{url.OriginalURL{
+			keeper: memKeeper{url.OriginalURL{
 				ID:     "0",
 				URL:    "http://shortener.com",
 				UserID: "c7cbe16d-034e-40b9-a2a5-e936851c4282",
@@ -76,7 +76,7 @@ func TestMemGet(t *testing.T) {
 		},
 		{
 			name: "not int id",
-			keeper: dataMemKeeper{url.OriginalURL{
+			keeper: memKeeper{url.OriginalURL{
 				ID:     "0",
 				URL:    "http://shortener.com",
 				UserID: "c7cbe16d-034e-40b9-a2a5-e936851c4282",
@@ -91,7 +91,7 @@ func TestMemGet(t *testing.T) {
 		},
 		{
 			name: "negative id",
-			keeper: dataMemKeeper{url.OriginalURL{
+			keeper: memKeeper{url.OriginalURL{
 				ID:     "0",
 				URL:    "http://shortener.com",
 				UserID: "c7cbe16d-034e-40b9-a2a5-e936851c4282",
@@ -106,7 +106,7 @@ func TestMemGet(t *testing.T) {
 		},
 		{
 			name: "too big id",
-			keeper: dataMemKeeper{
+			keeper: memKeeper{
 				url.OriginalURL{
 					ID:     "0",
 					URL:    "http://shortener.com",
@@ -145,14 +145,14 @@ func TestMemGet(t *testing.T) {
 func TestGetAllByUser(t *testing.T) {
 	tests := []struct {
 		name    string
-		keeper  dataMemKeeper
+		keeper  memKeeper
 		userID  string
 		want    []url.OriginalURL
 		wantErr bool
 	}{
 		{
 			name: "ok",
-			keeper: dataMemKeeper{
+			keeper: memKeeper{
 				url.OriginalURL{
 					ID:     "0",
 					URL:    "http://shortener.com",

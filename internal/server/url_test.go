@@ -42,7 +42,7 @@ func TestGetUrl(t *testing.T) {
 	}
 
 	mockedConverter := new(mockedConverter)
-	h := NewHandler(mockedConverter, chi.NewRouter(), nil, testSignKey)
+	h := NewHandler(mockedConverter, chi.NewRouter(), testSignKey)
 	ts := httptest.NewServer(h)
 	defer ts.Close()
 
@@ -96,7 +96,7 @@ func TestAddURL(t *testing.T) {
 	}
 
 	mockedURLHandler := new(mockedConverter)
-	h := NewHandler(mockedURLHandler, chi.NewRouter(), nil, testSignKey)
+	h := NewHandler(mockedURLHandler, chi.NewRouter(), testSignKey)
 	ts := httptest.NewServer(h)
 	defer ts.Close()
 
@@ -155,7 +155,7 @@ func TestAddURLFromJSON(t *testing.T) {
 	}
 
 	mockedURLHandler := new(mockedConverter)
-	h := NewHandler(mockedURLHandler, chi.NewRouter(), nil, testSignKey)
+	h := NewHandler(mockedURLHandler, chi.NewRouter(), testSignKey)
 	ts := httptest.NewServer(h)
 	defer ts.Close()
 
@@ -224,7 +224,7 @@ func TestGetAllURL(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			mockedURLHandler := new(mockedConverter)
-			h := NewHandler(mockedURLHandler, chi.NewRouter(), nil, testSignKey)
+			h := NewHandler(mockedURLHandler, chi.NewRouter(), testSignKey)
 			ts := httptest.NewServer(h)
 			defer ts.Close()
 

@@ -22,3 +22,12 @@ func (m *mockedDataKeeper) GetAllByUser(userID string) ([]OriginalURL, error) {
 	args := m.Called(userID)
 	return args.Get(0).([]OriginalURL), args.Error(1)
 }
+
+func (m *mockedDataKeeper) PingDB() error {
+	args := m.Called()
+	return args.Error(0)
+}
+
+func (m *mockedDataKeeper) Close() {
+	m.Called()
+}
