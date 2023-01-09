@@ -3,6 +3,7 @@ package server
 import (
 	"encoding/json"
 	"errors"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -12,47 +13,68 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-const testSignKey = "secret"
+const (
+	testBaseURL       = "http://127.0.0.1:8080"
+	testServerAddress = "127.0.0.1:8080"
+	testSignKey       = "secret"
+)
+
+var mConverter *mockedConverter
+var ts *httptest.Server
+
+func init() {
+	config := Config{
+		BaseURL: testBaseURL,
+		SignKey: testSignKey,
+	}
+
+	mConverter = new(mockedConverter)
+	h := NewHandler(mConverter, chi.NewRouter(), config)
+
+	ts = httptest.NewUnstartedServer(h)
+	l, err := net.Listen("tcp", testServerAddress)
+	if err != nil {
+		panic(err)
+	}
+	ts.Listener.Close()
+	ts.Listener = l
+
+	ts.Start()
+}
 
 func TestGetUrl(t *testing.T) {
 	tests := []struct {
 		name    string
-		path    string
-		id      string
-		res     string
+		encID   string
+		res     *url.URL
 		err     error
 		wantErr bool
 	}{
 		{
-			name:    "ok",
-			path:    "/0",
-			id:      "0",
-			res:     "https://google.com",
+			name:  "ok",
+			encID: "1",
+			res: &url.URL{
+				EncodedID: "1",
+				Original:  "http://shortener.com",
+			},
 			err:     nil,
 			wantErr: false,
 		},
 		{
 			name:    "not ok",
-			path:    "/abc",
-			id:      "abc",
-			res:     "",
+			encID:   "abc",
+			res:     nil,
 			err:     errors.New("wrong id"),
 			wantErr: true,
 		},
 	}
-
-	mockedConverter := new(mockedConverter)
-	h := NewHandler(mockedConverter, chi.NewRouter(), testSignKey)
-	ts := httptest.NewServer(h)
-	defer ts.Close()
-
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			mockedConverter.On("GetOriginal", tt.id).Return(tt.res, tt.err)
+			mConverter.On("GetOriginal", tt.encID).Return(tt.res, tt.err)
 
-			statusCode, _, header := testRequest(t, ts, http.MethodGet, tt.path, nil, nil)
+			statusCode, _, header := testRequest(t, ts, http.MethodGet, "/"+tt.encID, nil, nil)
 
-			mockedConverter.AssertExpectations(t)
+			mConverter.AssertExpectations(t)
 
 			if tt.wantErr {
 				assert.Equal(t, http.StatusBadRequest, statusCode)
@@ -60,7 +82,7 @@ func TestGetUrl(t *testing.T) {
 			}
 
 			assert.Equal(t, http.StatusTemporaryRedirect, statusCode)
-			assert.Equal(t, tt.res, header.Get("Location"))
+			assert.Equal(t, tt.res.Original, header.Get("Location"))
 		})
 	}
 }
@@ -71,8 +93,9 @@ func TestAddURL(t *testing.T) {
 		body       string
 		userID     string
 		authCookie string
-		res        string
+		res        *url.URL
 		err        error
+		want       string
 		wantErr    bool
 	}{
 		{
@@ -80,43 +103,42 @@ func TestAddURL(t *testing.T) {
 			body:       "http://shortener.com",
 			userID:     "cfb31f30-efa9-4244-b1d6-e04c8438771d",
 			authCookie: "XlBVspVMtREN3fydYOxHRdxJKff1Emw3UwLB5RgQrj9jZmIzMWYzMC1lZmE5LTQyNDQtYjFkNi1lMDRjODQzODc3MWQ=",
-			res:        "/0",
-			err:        nil,
-			wantErr:    false,
+			res: &url.URL{
+				EncodedID: "1",
+				Original:  "http://shortener.com",
+			},
+			err:     nil,
+			want:    ts.URL + "/1",
+			wantErr: false,
 		},
 		{
 			name:       "not ok",
 			body:       "shortener.com",
 			userID:     "cfb31f30-efa9-4244-b1d6-e04c8438771d",
 			authCookie: "XlBVspVMtREN3fydYOxHRdxJKff1Emw3UwLB5RgQrj9jZmIzMWYzMC1lZmE5LTQyNDQtYjFkNi1lMDRjODQzODc3MWQ=",
-			res:        "",
+			res:        nil,
 			err:        errors.New("wrong url"),
+			want:       "",
 			wantErr:    true,
 		},
 	}
-
-	mockedURLHandler := new(mockedConverter)
-	h := NewHandler(mockedURLHandler, chi.NewRouter(), testSignKey)
-	ts := httptest.NewServer(h)
-	defer ts.Close()
-
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			mockedURLHandler.On("Shorten", tt.body, tt.userID).Return(ts.URL+tt.res, tt.err)
+			mConverter.On("Shorten", tt.userID, tt.body).Return(tt.res, tt.err)
 
 			cookie := &http.Cookie{Name: authCookieName, Value: tt.authCookie}
 
 			statusCode, body, _ := testRequest(t, ts, http.MethodPost, "/", []byte(tt.body), cookie)
 
-			mockedURLHandler.AssertExpectations(t)
+			mConverter.AssertExpectations(t)
 
 			if tt.wantErr {
-				assert.Equal(t, http.StatusBadRequest, statusCode)
+				assert.Equal(t, http.StatusInternalServerError, statusCode)
 				return
 			}
 
 			assert.Equal(t, http.StatusCreated, statusCode)
-			assert.Equal(t, ts.URL+tt.res, string(body))
+			assert.Equal(t, ts.URL+"/"+tt.res.EncodedID, string(body))
 		})
 	}
 }
@@ -127,7 +149,7 @@ func TestAddURLFromJSON(t *testing.T) {
 		url        string
 		userID     string
 		authCookie string
-		res        string
+		res        *url.URL
 		cType      string
 		err        error
 		wantErr    bool
@@ -137,39 +159,42 @@ func TestAddURLFromJSON(t *testing.T) {
 			url:        "http://shortener.com",
 			userID:     "cfb31f30-efa9-4244-b1d6-e04c8438771d",
 			authCookie: "XlBVspVMtREN3fydYOxHRdxJKff1Emw3UwLB5RgQrj9jZmIzMWYzMC1lZmE5LTQyNDQtYjFkNi1lMDRjODQzODc3MWQ=",
-			res:        "/0",
-			cType:      "application/json",
-			err:        nil,
-			wantErr:    false,
+			res: &url.URL{
+				EncodedID: "1",
+				Original:  "http://shortener.com",
+			},
+			cType:   "application/json",
+			err:     nil,
+			wantErr: false,
 		},
 		{
 			name:       "not ok",
 			url:        "shortener.com",
 			userID:     "cfb31f30-efa9-4244-b1d6-e04c8438771d",
 			authCookie: "XlBVspVMtREN3fydYOxHRdxJKff1Emw3UwLB5RgQrj9jZmIzMWYzMC1lZmE5LTQyNDQtYjFkNi1lMDRjODQzODc3MWQ=",
-			res:        "",
+			res:        nil,
 			cType:      "",
 			err:        errors.New("wrong url"),
 			wantErr:    true,
 		},
 	}
-
-	mockedURLHandler := new(mockedConverter)
-	h := NewHandler(mockedURLHandler, chi.NewRouter(), testSignKey)
-	ts := httptest.NewServer(h)
-	defer ts.Close()
-
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			jsonBody := `{"url":"` + tt.url + `"}`
-			jsonResp := `{"result":"` + ts.URL + tt.res + `"}`
-			mockedURLHandler.On("Shorten", tt.url, tt.userID).Return(ts.URL+tt.res, tt.err)
+			var jsonResp string
+			if tt.res != nil {
+				jsonResp = `{"result":"` + ts.URL + "/" + tt.res.EncodedID + `"}`
+			} else {
+				jsonResp = ""
+			}
+
+			mConverter.On("Shorten", tt.userID, tt.url).Return(tt.res, tt.err)
 
 			cookie := &http.Cookie{Name: authCookieName, Value: tt.authCookie}
 
 			statusCode, respBody, header := testRequest(t, ts, http.MethodPost, "/api/shorten", []byte(jsonBody), cookie)
 
-			mockedURLHandler.AssertExpectations(t)
+			mConverter.AssertExpectations(t)
 
 			if tt.wantErr {
 				assert.Equal(t, http.StatusBadRequest, statusCode)
@@ -199,54 +224,37 @@ func TestGetAllURL(t *testing.T) {
 			authCookie: "XlBVspVMtREN3fydYOxHRdxJKff1Emw3UwLB5RgQrj9jZmIzMWYzMC1lZmE5LTQyNDQtYjFkNi1lMDRjODQzODc3MWQ=",
 			res: []url.URL{
 				{
-					ShortURL:    "/0",
-					OriginalURL: "http://very-long-url/0",
+					EncodedID: "1",
+					Original:  "http://very-long-url/0",
 				},
 				{
-					ShortURL:    "/1",
-					OriginalURL: "http://very-long-url/1",
+					EncodedID: "2",
+					Original:  "http://very-long-url/1",
 				},
 			},
 			err:    nil,
 			cType:  "application/json",
 			status: http.StatusOK,
 		},
-		{
-			name:       "empty",
-			userID:     "cfb31f30-efa9-4244-b1d6-e04c8438771d",
-			authCookie: "XlBVspVMtREN3fydYOxHRdxJKff1Emw3UwLB5RgQrj9jZmIzMWYzMC1lZmE5LTQyNDQtYjFkNi1lMDRjODQzODc3MWQ=",
-			res:        []url.URL{},
-			err:        nil,
-			cType:      "",
-			status:     http.StatusNoContent,
-		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			mockedURLHandler := new(mockedConverter)
-			h := NewHandler(mockedURLHandler, chi.NewRouter(), testSignKey)
-			ts := httptest.NewServer(h)
-			defer ts.Close()
-
-			for i := range tt.res {
-				tt.res[i].ShortURL = ts.URL + tt.res[i].ShortURL
+			respData := []responseAll{}
+			for _, item := range tt.res {
+				respData = append(respData, responseAll{
+					ShortURL:    ts.URL + "/" + item.EncodedID,
+					OriginalURL: item.Original,
+				})
 			}
+			jsonResp, _ := json.Marshal(respData)
 
-			var jsonResp []byte
-
-			if len(tt.res) != 0 {
-				jsonResp, _ = json.Marshal(tt.res)
-			} else {
-				jsonResp = []byte{}
-			}
-
-			mockedURLHandler.On("GetAll", tt.userID).Return(tt.res, tt.err)
+			mConverter.On("GetAllByUser", tt.userID).Return(tt.res, tt.err)
 
 			cookie := &http.Cookie{Name: authCookieName, Value: tt.authCookie}
 
 			statusCode, respBody, header := testRequest(t, ts, http.MethodGet, "/api/user/urls", nil, cookie)
 
-			mockedURLHandler.AssertExpectations(t)
+			mConverter.AssertExpectations(t)
 
 			assert.Equal(t, tt.status, statusCode)
 			assert.Equal(t, tt.cType, header.Get("Content-Type"))

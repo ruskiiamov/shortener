@@ -14,27 +14,35 @@ type Router interface {
 	AddMiddlewares(middlewares ...func(http.Handler) http.Handler)
 }
 
+type Config struct {
+	BaseURL string
+	SignKey string
+}
+
 type handler struct {
 	router       Router
 	urlConverter url.Converter
+	baseURL      string
 }
 
 func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	h.router.ServeHTTP(w, r)
 }
 
-func NewHandler(u url.Converter, r Router, signKey string) *handler {
+func NewHandler(u url.Converter, r Router, c Config) *handler {
 	h := &handler{
 		router:       r,
 		urlConverter: u,
+		baseURL:      c.BaseURL,
 	}
 
-	initAuth(signKey)
+	initAuth(c.SignKey)
 	h.router.AddMiddlewares(gzipCompress, auth)
 
 	h.router.GET("/{id}", h.getURL())
 	h.router.POST("/", h.addURL())
 	h.router.POST("/api/shorten", h.addURLFromJSON())
+	h.router.POST("/api/shorten/batch", h.addURLBatch())
 	h.router.GET("/api/user/urls", h.getAllURL())
 	h.router.GET("/ping", h.pingDB())
 

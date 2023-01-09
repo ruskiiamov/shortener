@@ -44,10 +44,14 @@ func main() {
 	}
 	defer dataKeeper.Close()
 
-	urlConverter := url.NewConverter(dataKeeper, config.BaseURL)
+	urlConverter := url.NewConverter(dataKeeper)
 
 	router := chi.NewRouter()
-	handler := server.NewHandler(urlConverter, router, config.AuthSignKey)
+	serverConfig := server.Config{
+		BaseURL: config.BaseURL,
+		SignKey: config.AuthSignKey,
+	}
+	handler := server.NewHandler(urlConverter, router, serverConfig)
 
 	log.Fatal(http.ListenAndServe(config.ServerAddress, handler))
 }

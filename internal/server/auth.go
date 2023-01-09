@@ -107,6 +107,7 @@ func createUserID(w http.ResponseWriter) (string, error) {
 	http.SetCookie(w, &http.Cookie{
 		Name:  authCookieName,
 		Value: valueStr,
+		Path:  "/",
 	})
 
 	return userID, nil

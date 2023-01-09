@@ -3,6 +3,8 @@ package data
 import (
 	"context"
 	"database/sql"
+	"errors"
+	"fmt"
 	"time"
 
 	_ "github.com/jackc/pgx/v5/stdlib"
@@ -34,69 +36,141 @@ func tableDoesntExist(db *sql.DB) bool {
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 	defer cancel()
 
-	err := db.QueryRowContext(ctx, "SELECT * FROM urls LIMIT 1;").Err()
+	err := db.QueryRowContext(ctx, "SELECT id FROM urls LIMIT 1;").Err()
 
 	return err != nil
 }
 
 func createTable(db *sql.DB) error {
-	_, err := db.Exec("CREATE TABLE urls (id serial PRIMARY KEY, url varchar, user_id uuid);")
-
-	return err
-}
-
-func (d *dbKeeper) Add(u url.OriginalURL) (id string, err error) {
-	if id, ok := d.getID(u); ok {
-		return id, nil
+	_, err := db.Exec("CREATE TABLE urls (id serial PRIMARY KEY, url varchar, users text[]);")
+	if err != nil {
+		return fmt.Errorf("cannot create db table: %w", err)
 	}
 
-	err = d.db.QueryRow("INSERT INTO urls (url, user_id) VALUES ($1, $2) RETURNING id;", u.URL, u.UserID).Scan(&id)
+	_, err = db.Exec("CREATE UNIQUE INDEX url_idx ON urls (url);")
 	if err != nil {
-		return "", err
+		return fmt.Errorf("cannot create index for url: %w", err)
+	}
+
+	return nil
+}
+
+func (d *dbKeeper) Add(userID, original string) (int, error) {
+	var id int
+
+	err := d.db.QueryRow(
+		`INSERT INTO urls (url, users) VALUES ($1, ARRAY[$2]) ON CONFLICT (url) DO UPDATE 
+		SET users=ARRAY_APPEND(urls.users, $2) WHERE NOT urls.users @> ARRAY[$2] RETURNING id;`,
+		original,
+		userID,
+	).Scan(&id)
+
+	if errors.Is(err, sql.ErrNoRows) {
+		err = d.db.QueryRow(`SELECT id FROM urls WHERE url=$1;`, original).Scan(&id)
+		if err != nil {
+			return 0, fmt.Errorf("cannot find url: %w", err)
+		}
+		return 0, url.NewErrURLDuplicate(id, original)
+	}
+
+	if err != nil {
+		return 0, fmt.Errorf("cannot add url: %w", err)
 	}
 
 	return id, nil
 }
 
-func (d *dbKeeper) Get(id string) (*url.OriginalURL, error) {
-	var u url.OriginalURL
+func (d *dbKeeper) AddBatch(userID string, originals []string) (map[string]int, error) {
+	added := make(map[string]int)
 
-	err := d.db.QueryRow("SELECT * FROM urls WHERE id=$1;", id).Scan(&u.ID, &u.URL, &u.UserID)
+	tx, err := d.db.Begin()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("transaction error: %w", err)
 	}
+	defer tx.Rollback()
 
-	return &u, nil
-}
-
-func (d *dbKeeper) GetAllByUser(userID string) ([]url.OriginalURL, error) {
-	urls := make([]url.OriginalURL, 0)
-
-	rows, err := d.db.Query("SELECT * FROM urls WHERE user_id=$1;", userID)
+	insStmt, err := tx.Prepare(
+		`INSERT INTO urls (url, users) VALUES ($1, ARRAY[$2]) ON CONFLICT (url) DO UPDATE 
+		SET users=ARRAY_APPEND(urls.users, $2) WHERE NOT urls.users @> ARRAY[$2] RETURNING id;`,
+	)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("statement error: %w", err)
 	}
+	defer insStmt.Close()
 
-	for rows.Next() {
-		var u url.OriginalURL
+	selStmt, err := tx.Prepare(`SELECT id FROM urls WHERE url=$1;`)
+	if err != nil {
+		return nil, fmt.Errorf("statement error: %w", err)
+	}
+	defer selStmt.Close()
 
-		err = rows.Scan(&u.ID, &u.URL, &u.UserID)
-		if err != nil {
-			return nil, err
+	var id int
+
+	for _, original := range originals {
+		err = insStmt.QueryRow(original, userID).Scan(&id)
+
+		if errors.Is(err, sql.ErrNoRows) {
+			err = selStmt.QueryRow(original).Scan(&id)
+			if err != nil {
+				return nil, fmt.Errorf("cannot find url: %w", err)
+			}
 		}
 
-		urls = append(urls, u)
+		if err != nil {
+			return nil, fmt.Errorf("cannot add url: %w", err)
+		}
+
+		added[original] = id
+	}
+
+	err = tx.Commit()
+	if err != nil {
+		return nil, fmt.Errorf("transaction commit error: %w", err)
+	}
+
+	return added, nil
+}
+
+func (d *dbKeeper) Get(id int) (string, error) {
+	var original string
+
+	err := d.db.QueryRow("SELECT url FROM urls WHERE id=$1;", id).Scan(&original)
+	if err != nil {
+		return "", fmt.Errorf("cannot find url: %w", err)
+	}
+
+	return original, nil
+}
+
+func (d *dbKeeper) GetAllByUser(userID string) (map[string]int, error) {
+	urls := make(map[string]int)
+
+	rows, err := d.db.Query("SELECT id, url FROM urls WHERE $1 = ANY (users);", userID)
+	if err != nil {
+		return nil, fmt.Errorf("cannot find urls: %w", err)
+	}
+
+	var id int
+	var original string
+
+	for rows.Next() {
+		err = rows.Scan(&id, &original)
+		if err != nil {
+			return nil, fmt.Errorf("cannot scan values: %w", err)
+		}
+
+		urls[original] = id
 	}
 
 	err = rows.Err()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("db error: %w", err)
 	}
 
 	return urls, nil
 }
 
-func (d *dbKeeper) PingDB() error {
+func (d *dbKeeper) Ping() error {
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 	defer cancel()
 
@@ -107,17 +181,6 @@ func (d *dbKeeper) PingDB() error {
 	return nil
 }
 
-func (d *dbKeeper) Close() {
-	d.db.Close()
-}
-
-func (d *dbKeeper) getID(u url.OriginalURL) (string, bool) {
-	var id string
-
-	err := d.db.QueryRow("SELECT id FROM urls WHERE url=$1 AND user_id=$2;", u.URL, u.UserID).Scan(&id)
-	if err != nil {
-		return "", false
-	}
-
-	return id, true
+func (d *dbKeeper) Close() error {
+	return d.db.Close()
 }
