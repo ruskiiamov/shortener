@@ -1,49 +1,173 @@
 package url
 
-import neturl "net/url"
+import (
+	"errors"
+	"fmt"
+	"math/big"
+	neturl "net/url"
+)
 
-type OriginalURL struct {
-	ID  string `json:"id"`
-	URL string `json:"url"`
+const base62 = 62
+
+type ErrURLDuplicate struct {
+	ID        int
+	EncodedID string
+	URL       string
+}
+
+func (e *ErrURLDuplicate) Error() string {
+	return fmt.Sprintf("URL duplicate %s id=%d", e.URL, e.ID)
+}
+
+func NewErrURLDuplicate(id int, original string) *ErrURLDuplicate {
+	return &ErrURLDuplicate{
+		ID:  id,
+		URL: original,
+	}
 }
 
 type DataKeeper interface {
-	Add(OriginalURL) (id string, err error)
-	Get(id string) (*OriginalURL, error)
+	Add(userID, original string) (int, error)
+	AddBatch(userID string, originals []string) (map[string]int, error)
+	Get(id int) (string, error)
+	GetAllByUser(userID string) (map[string]int, error)
+	Ping() error
+	Close() error
+}
+
+type URL struct {
+	EncodedID string
+	Original  string
+}
+
+type Converter interface {
+	Shorten(userID, original string) (*URL, error)
+	ShortenBatch(userID string, originals []string) ([]URL, error)
+	GetOriginal(encodedID string) (*URL, error)
+	GetAllByUser(userID string) ([]URL, error)
+	PingKeeper() error
 }
 
 type converter struct {
 	dataKeeper DataKeeper
-	baseURL    string
 }
 
-func NewConverter(d DataKeeper, baseURL string) *converter {
-	return &converter{
-		dataKeeper: d,
-		baseURL:    baseURL,
-	}
+func NewConverter(d DataKeeper) Converter {
+	return &converter{dataKeeper: d}
 }
 
-func (c *converter) Shorten(url string) (string, error) {
-	if _, err := neturl.ParseRequestURI(url); err != nil {
-		return "", err
+func (c *converter) Shorten(userID, original string) (*URL, error) {
+	if _, err := neturl.ParseRequestURI(original); err != nil {
+		return nil, fmt.Errorf("URL %s not valid: %w", original, err)
 	}
 
-	originalURL := OriginalURL{URL: url}
+	var errDupl *ErrURLDuplicate
 
-	id, err := c.dataKeeper.Add(originalURL)
+	id, err := c.dataKeeper.Add(userID, original)
+	if errors.As(err, &errDupl) {
+		errDupl.EncodedID = encode(errDupl.ID)
+		return nil, errDupl
+	}
 	if err != nil {
-		return "", err
+		return nil, fmt.Errorf("URL %s adding error: %w", original, err)
 	}
 
-	return c.baseURL + "/" + id, nil
+	return &URL{EncodedID: encode(id), Original: original}, nil
 }
 
-func (c *converter) GetOriginal(id string) (string, error) {
-	originalURL, err := c.dataKeeper.Get(id)
-	if err != nil {
-		return "", err
+func (c *converter) ShortenBatch(userID string, originals []string) ([]URL, error) {
+	if len(originals) == 0 {
+		return nil, errors.New("empty originals")
 	}
 
-	return originalURL.URL, nil
+	originals = unique(originals)
+
+	for _, original := range originals {
+		if _, err := neturl.ParseRequestURI(original); err != nil {
+			return nil, fmt.Errorf("URL %s not valid: %w", original, err)
+		}
+	}
+
+	m, err := c.dataKeeper.AddBatch(userID, originals)
+	if err != nil {
+		return nil, fmt.Errorf("URLs adding error: %w", err)
+	}
+
+	var result []URL
+	for original, id := range m {
+		result = append(result, URL{
+			EncodedID: encode(id),
+			Original:  original,
+		})
+	}
+
+	return result, nil
+}
+
+func (c *converter) GetOriginal(encodedID string) (*URL, error) {
+	id, err := decode(encodedID)
+	if err != nil {
+		return nil, fmt.Errorf("decoding error: %w", err)
+	}
+
+	original, err := c.dataKeeper.Get(id)
+	if err != nil {
+		return nil, fmt.Errorf("data keeper error: %w", err)
+	}
+
+	return &URL{
+		EncodedID: encodedID,
+		Original:  original,
+	}, nil
+}
+
+func (c *converter) GetAllByUser(userID string) ([]URL, error) {
+	m, err := c.dataKeeper.GetAllByUser(userID)
+	if err != nil {
+		return nil, err
+	}
+
+	var result []URL
+	for original, id := range m {
+		result = append(result, URL{
+			EncodedID: encode(id),
+			Original:  original,
+		})
+	}
+
+	return result, nil
+}
+
+func (c *converter) PingKeeper() error {
+	return c.dataKeeper.Ping()
+}
+
+func encode(id int) string {
+	var i big.Int
+	i.SetInt64(int64(id))
+
+	return i.Text(base62)
+}
+
+func decode(encodedID string) (int, error) {
+	var i big.Int
+	_, ok := i.SetString(encodedID, base62)
+	if !ok {
+		return 0, fmt.Errorf("encoded id not valid: %s", encodedID)
+	}
+
+	return int(i.Int64()), nil
+}
+
+func unique(originals []string) []string {
+	result := make([]string, 0)
+	m := make(map[string]bool)
+	for _, original := range originals {
+		if _, ok := m[original]; !ok {
+			m[original] = true
+			result = append(result, original)
+		}
+	}
+
+	return result
 }

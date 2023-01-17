@@ -3,7 +3,6 @@ package server
 import (
 	"bytes"
 	"io"
-	"log"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -11,9 +10,20 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func testRequest(t *testing.T, ts *httptest.Server, method, path string, body []byte) (int, string, http.Header) {
+func testRequest(
+	t *testing.T,
+	ts *httptest.Server,
+	method,
+	path string,
+	body []byte,
+	c *http.Cookie,
+) (int, string, http.Header) {
 	req, err := http.NewRequest(method, ts.URL+path, bytes.NewBuffer(body))
 	require.NoError(t, err)
+
+	if c != nil {
+		req.AddCookie(c)
+	}
 
 	client := &http.Client{
 		CheckRedirect: func(req *http.Request, via []*http.Request) error {
@@ -24,15 +34,9 @@ func testRequest(t *testing.T, ts *httptest.Server, method, path string, body []
 	resp, err := client.Do(req)
 	require.NoError(t, err)
 
-	log.Println("TEST RESPONSE HEADERS: ", resp.Header)
-
 	respBody, err := io.ReadAll(resp.Body)
-	log.Println("TEST BODY ERROR: ", err)
 	require.NoError(t, err)
-
 	defer resp.Body.Close()
-
-	log.Println("TEST RESP BODY: ", string(respBody))
 
 	return resp.StatusCode, string(respBody), resp.Header
 }

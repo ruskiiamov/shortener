@@ -16,6 +16,8 @@ type Config struct {
 	ServerAddress   string `env:"SERVER_ADDRESS" envDefault:"localhost:8080"`
 	BaseURL         string `env:"BASE_URL" envDefault:"http://localhost:8080"`
 	FileStoragePath string `env:"FILE_STORAGE_PATH"`
+	AuthSignKey     string `env:"AUTH_SIGN_KEY" envDefault:"secret_key"`
+	DatabaseDSN     string `env:"DATABASE_DSN"`
 }
 
 func getConfig() *Config {
@@ -26,6 +28,8 @@ func getConfig() *Config {
 	flag.StringVar(&config.ServerAddress, "a", config.ServerAddress, "Server address")
 	flag.StringVar(&config.BaseURL, "b", config.BaseURL, "Base URL")
 	flag.StringVar(&config.FileStoragePath, "f", config.FileStoragePath, "File storage path")
+	flag.StringVar(&config.AuthSignKey, "s", config.AuthSignKey, "Auth sign key")
+	flag.StringVar(&config.DatabaseDSN, "d", config.DatabaseDSN, "Database DSN")
 	flag.Parse()
 
 	return &config
@@ -34,11 +38,20 @@ func getConfig() *Config {
 func main() {
 	config := getConfig()
 
-	dataKeeper := data.NewKeeper(config.FileStoragePath)
-	urlConverter := url.NewConverter(dataKeeper, config.BaseURL)
+	dataKeeper, err := data.NewKeeper(config.DatabaseDSN, config.FileStoragePath)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer dataKeeper.Close()
+
+	urlConverter := url.NewConverter(dataKeeper)
 
 	router := chi.NewRouter()
-	handler := server.NewHandler(urlConverter, router)
+	serverConfig := server.Config{
+		BaseURL: config.BaseURL,
+		SignKey: config.AuthSignKey,
+	}
+	handler := server.NewHandler(urlConverter, router, serverConfig)
 
 	log.Fatal(http.ListenAndServe(config.ServerAddress, handler))
 }

@@ -2,57 +2,55 @@ package server
 
 import (
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 
 	"github.com/go-http-utils/headers"
+	"github.com/ruskiiamov/shortener/internal/url"
 )
 
 const applicationJSON = "application/json"
 
-type url struct {
+type requestData struct {
 	URL string `json:"url"`
 }
 
-type result struct {
+type responseData struct {
 	Result string `json:"result"`
 }
 
-func (h *Handler) getURL() http.HandlerFunc {
+type requestBatch struct {
+	CorrelationID string `json:"correlation_id"`
+	OriginalURL   string `json:"original_url"`
+}
+
+type responseBatch struct {
+	CorrelationID string `json:"correlation_id"`
+	ShortURL      string `json:"short_url"`
+}
+
+type responseAll struct {
+	ShortURL    string `json:"short_url"`
+	OriginalURL string `json:"original_url"`
+}
+
+func (h *handler) getURL() http.HandlerFunc {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		id := h.router.GetURLParam(r, "id")
 
-		originalURL, err := h.converter.GetOriginal(id)
+		shortURL, err := h.urlConverter.GetOriginal(id)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
 
-		w.Header().Add(headers.Location, originalURL)
+		w.Header().Add(headers.Location, shortURL.Original)
 		w.WriteHeader(http.StatusTemporaryRedirect)
 	})
 }
 
-func (h *Handler) addURL() http.HandlerFunc {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		url, err := io.ReadAll(r.Body)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
-			return
-		}
-
-		shortURL, err := h.converter.Shorten(string(url))
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
-			return
-		}
-
-		w.WriteHeader(http.StatusCreated)
-		w.Write([]byte(shortURL))
-	})
-}
-
-func (h *Handler) addURLFromJSON() http.HandlerFunc {
+func (h *handler) addURL() http.HandlerFunc {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		body, err := io.ReadAll(r.Body)
 		if err != nil {
@@ -60,27 +58,189 @@ func (h *Handler) addURLFromJSON() http.HandlerFunc {
 			return
 		}
 
-		u := new(url)
-		if err := json.Unmarshal(body, u); err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
+		userID, err := r.Cookie(userIDCookieName)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 
-		shortURL, err := h.converter.Shorten(string(u.URL))
+		var errDupl *url.ErrURLDuplicate
+
+		shortURL, err := h.urlConverter.Shorten(userID.Value, string(body))
+		if errors.As(err, &errDupl) {
+			w.WriteHeader(http.StatusConflict)
+			w.Write([]byte(h.baseURL + "/" + errDupl.EncodedID))
+			return
+		}
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		w.WriteHeader(http.StatusCreated)
+		w.Write([]byte(h.baseURL + "/" + shortURL.EncodedID))
+	})
+}
+
+func (h *handler) addURLFromJSON() http.HandlerFunc {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, err := io.ReadAll(r.Body)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
 
-		res := result{shortURL}
-		jsonRes, err := json.Marshal(res)
+		reqData := new(requestData)
+		if err := json.Unmarshal(body, reqData); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+
+		userID, err := r.Cookie(userIDCookieName)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		var errDupl *url.ErrURLDuplicate
+
+		shortURL, err := h.urlConverter.Shorten(userID.Value, reqData.URL)
+		if errors.As(err, &errDupl) {
+			resData := responseData{h.baseURL + "/" + errDupl.EncodedID}
+			jsonRes, err := json.Marshal(resData)
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+			w.Header().Add(headers.ContentType, applicationJSON)
+			w.WriteHeader(http.StatusConflict)
+			w.Write(jsonRes)
+			return
+		}
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+
+		resData := responseData{h.baseURL + "/" + shortURL.EncodedID}
+		jsonRes, err := json.Marshal(resData)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 
 		w.Header().Add(headers.ContentType, applicationJSON)
 		w.WriteHeader(http.StatusCreated)
 		w.Write(jsonRes)
+	})
+}
+
+func (h *handler) addURLBatch() http.HandlerFunc {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+
+		var reqData []requestBatch
+		if err := json.Unmarshal(body, &reqData); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+
+		userID, err := r.Cookie(userIDCookieName)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		var originals []string
+		for _, item := range reqData {
+			originals = append(originals, item.OriginalURL)
+		}
+		shortURLs, err := h.urlConverter.ShortenBatch(userID.Value, originals)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		var resData []responseBatch
+		for _, item := range reqData {
+			for _, shortURL := range shortURLs {
+				if shortURL.Original == item.OriginalURL {
+					resData = append(resData, responseBatch{
+						CorrelationID: item.CorrelationID,
+						ShortURL:      h.baseURL + "/" + shortURL.EncodedID,
+					})
+					break
+				}
+			}
+		}
+
+		if len(reqData) != len(resData) {
+			http.Error(w, "url adding error", http.StatusInternalServerError)
+			return
+		}
+
+		jsonRes, err := json.Marshal(resData)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		w.Header().Add(headers.ContentType, applicationJSON)
+		w.WriteHeader(http.StatusCreated)
+		w.Write(jsonRes)
+	})
+}
+
+func (h *handler) getAllURL() http.HandlerFunc {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		userID, err := r.Cookie(userIDCookieName)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		shortURLs, err := h.urlConverter.GetAllByUser(userID.Value)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		if len(shortURLs) == 0 {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+
+		var resData []responseAll
+		for _, shortURL := range shortURLs {
+			resData = append(resData, responseAll{
+				ShortURL:    h.baseURL + "/" + shortURL.EncodedID,
+				OriginalURL: shortURL.Original,
+			})
+		}
+
+		jsonRes, err := json.Marshal(resData)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		w.Header().Add(headers.ContentType, applicationJSON)
+		w.WriteHeader(http.StatusOK)
+		w.Write(jsonRes)
+	})
+}
+
+func (h *handler) pingDB() http.HandlerFunc {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if err := h.urlConverter.PingKeeper(); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		w.WriteHeader(http.StatusOK)
 	})
 }
