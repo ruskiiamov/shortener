@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"sync"
 
 	"github.com/ruskiiamov/shortener/internal/url"
 )
@@ -13,18 +14,9 @@ import (
 const defaultNextID = 1
 
 type memURL struct {
-	Original string   `json:"original"`
-	Users    []string `json:"users"`
-}
-
-func (m *memURL) hasUser(userID string) bool {
-	for _, user := range m.Users {
-		if user == userID {
-			return true
-		}
-	}
-
-	return false
+	Original string `json:"original"`
+	User     string `json:"user"`
+	Deleted  bool   `json:"deleted"`
 }
 
 type URLData struct {
@@ -35,6 +27,7 @@ type URLData struct {
 type memKeeper struct {
 	filePath string
 	data     URLData
+	mu       sync.RWMutex
 }
 
 func newMemKeeper(filePath string) (url.DataKeeper, error) {
@@ -81,14 +74,12 @@ func newMemKeeper(filePath string) (url.DataKeeper, error) {
 }
 
 func (m *memKeeper) Add(userID, original string) (int, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
 	matches := m.findMatches([]string{original})
 	if len(matches) != 0 {
 		id := matches[original]
-		m.addUser(id, userID)
-		err := m.saveFile()
-		if err != nil {
-			return 0, fmt.Errorf("cannot save file: %w", err)
-		}
 		return 0, url.NewErrURLDuplicate(id, original)
 	}
 
@@ -96,7 +87,7 @@ func (m *memKeeper) Add(userID, original string) (int, error) {
 
 	m.data.URLs[id] = memURL{
 		Original: original,
-		Users:    []string{userID},
+		User:     userID,
 	}
 
 	err := m.saveFile()
@@ -108,13 +99,15 @@ func (m *memKeeper) Add(userID, original string) (int, error) {
 }
 
 func (m *memKeeper) AddBatch(userID string, originals []string) (map[string]int, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
 	added := make(map[string]int)
 
 	matches := m.findMatches(originals)
 
 	for _, original := range originals {
 		if id, ok := matches[original]; ok {
-			m.addUser(id, userID)
 			added[original] = id
 			continue
 		}
@@ -122,7 +115,7 @@ func (m *memKeeper) AddBatch(userID string, originals []string) (map[string]int,
 		id := m.getNextID()
 		m.data.URLs[id] = memURL{
 			Original: original,
-			Users:    []string{userID},
+			User:     userID,
 		}
 		added[original] = id
 	}
@@ -136,24 +129,58 @@ func (m *memKeeper) AddBatch(userID string, originals []string) (map[string]int,
 }
 
 func (m *memKeeper) Get(id int) (string, error) {
-	memURL, ok := m.data.URLs[id]
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	mURL, ok := m.data.URLs[id]
 	if !ok {
 		return "", errors.New("wrong id")
 	}
 
-	return memURL.Original, nil
+	if mURL.Deleted {
+		return "", new(url.ErrURLDeleted)
+	}
+
+	return mURL.Original, nil
 }
 
 func (m *memKeeper) GetAllByUser(userID string) (map[string]int, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
 	urls := make(map[string]int)
 
-	for id, memURL := range m.data.URLs {
-		if memURL.hasUser(userID) {
-			urls[memURL.Original] = id
+	for id, mURL := range m.data.URLs {
+		if mURL.User == userID && !mURL.Deleted {
+			urls[mURL.Original] = id
 		}
 	}
 
 	return urls, nil
+}
+
+func (m *memKeeper) DeleteBatch(userID string, IDs []int) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	for _, id := range IDs {
+		mURL, ok := m.data.URLs[id]
+		if !ok {
+			continue
+		}
+
+		if mURL.User == userID {
+			mURL.Deleted = true
+			m.data.URLs[id] = mURL 
+		}
+	}
+
+	err := m.saveFile()
+	if err != nil {
+		return fmt.Errorf("cannot save file: %w", err)
+	}
+
+	return nil
 }
 
 func (m *memKeeper) Ping() error {
@@ -166,17 +193,6 @@ func (m *memKeeper) Close() error {
 		return fmt.Errorf("cannot save file: %w", err)
 	}
 	return nil
-}
-
-func (m *memKeeper) addUser(id int, userID string) {
-	memURL := m.data.URLs[id]
-
-	if memURL.hasUser(userID) {
-		return
-	}
-
-	memURL.Users = append(memURL.Users, userID)
-	m.data.URLs[id] = memURL
 }
 
 func (m *memKeeper) getNextID() int {
@@ -213,9 +229,9 @@ func (m *memKeeper) saveFile() error {
 func (m *memKeeper) findMatches(originals []string) map[string]int {
 	matches := make(map[string]int)
 
-	for id, memURL := range m.data.URLs {
+	for id, mURL := range m.data.URLs {
 		for _, original := range originals {
-			if memURL.Original == original {
+			if mURL.Original == original {
 				matches[original] = id
 				break
 			}

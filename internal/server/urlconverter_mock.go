@@ -29,6 +29,11 @@ func (m *mockedConverter) GetAllByUser(userID string) ([]url.URL, error) {
 	return args.Get(0).([]url.URL), args.Error(1)
 }
 
+func (m *mockedConverter) RemoveBatch(userID string, encodedIDs []string) error {
+	args := m.Called(userID, encodedIDs)
+	return args.Error(0)
+}
+
 func (m *mockedConverter) PingKeeper() error {
 	args := m.Called()
 	return args.Error(0)

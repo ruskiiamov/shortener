@@ -28,6 +28,11 @@ func (m *mockedDataKeeper) GetAllByUser(userID string) (map[string]int, error) {
 	return args.Get(0).(map[string]int), args.Error(1)
 }
 
+func (m *mockedDataKeeper) DeleteBatch(userID string, IDs []int) error {
+	args := m.Called(userID, IDs)
+	return args.Error(0)
+}
+
 func (m *mockedDataKeeper) Ping() error {
 	args := m.Called()
 	return args.Error(0)

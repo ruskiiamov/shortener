@@ -26,11 +26,18 @@ func NewErrURLDuplicate(id int, original string) *ErrURLDuplicate {
 	}
 }
 
+type ErrURLDeleted struct{}
+
+func (e *ErrURLDeleted) Error() string {
+	return "URL deleted"
+}
+
 type DataKeeper interface {
 	Add(userID, original string) (int, error)
 	AddBatch(userID string, originals []string) (map[string]int, error)
 	Get(id int) (string, error)
 	GetAllByUser(userID string) (map[string]int, error)
+	DeleteBatch(userID string, IDs []int) error
 	Ping() error
 	Close() error
 }
@@ -45,6 +52,7 @@ type Converter interface {
 	ShortenBatch(userID string, originals []string) ([]URL, error)
 	GetOriginal(encodedID string) (*URL, error)
 	GetAllByUser(userID string) ([]URL, error)
+	RemoveBatch(userID string, encodedIDs []string) error
 	PingKeeper() error
 }
 
@@ -138,6 +146,25 @@ func (c *converter) GetAllByUser(userID string) ([]URL, error) {
 	return result, nil
 }
 
+func (c *converter) RemoveBatch(userID string, encodedIDs []string) error {
+	if len(encodedIDs) == 0 {
+		return errors.New("empty encodedIDs")
+	}
+
+	encodedIDs = unique(encodedIDs)
+
+	IDs := make([]int, 0, len(encodedIDs))
+	for _, encodedID := range encodedIDs {
+		id, err := decode(encodedID)
+		if err != nil {
+			return fmt.Errorf("decoding error: %w", err)
+		}
+		IDs = append(IDs, id)
+	}
+
+	return c.dataKeeper.DeleteBatch(userID, IDs)
+}
+
 func (c *converter) PingKeeper() error {
 	return c.dataKeeper.Ping()
 }
@@ -159,9 +186,9 @@ func decode(encodedID string) (int, error) {
 	return int(i.Int64()), nil
 }
 
-func unique(originals []string) []string {
-	result := make([]string, 0)
-	m := make(map[string]bool)
+func unique[T comparable](originals []T) []T {
+	result := make([]T, 0)
+	m := make(map[T]bool)
 	for _, original := range originals {
 		if _, ok := m[original]; !ok {
 			m[original] = true

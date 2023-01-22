@@ -42,7 +42,14 @@ func tableDoesntExist(db *sql.DB) bool {
 }
 
 func createTable(db *sql.DB) error {
-	_, err := db.Exec("CREATE TABLE urls (id serial PRIMARY KEY, url varchar, users text[]);")
+	_, err := db.Exec(
+		`CREATE TABLE urls (
+			id serial PRIMARY KEY, 
+			url varchar, 
+			"user" varchar,
+			deleted boolean DEFAULT FALSE
+		);`,
+	)
 	if err != nil {
 		return fmt.Errorf("cannot create db table: %w", err)
 	}
@@ -59,8 +66,7 @@ func (d *dbKeeper) Add(userID, original string) (int, error) {
 	var id int
 
 	err := d.db.QueryRow(
-		`INSERT INTO urls (url, users) VALUES ($1, ARRAY[$2]) ON CONFLICT (url) DO UPDATE 
-		SET users=ARRAY_APPEND(urls.users, $2) WHERE NOT urls.users @> ARRAY[$2] RETURNING id;`,
+		`INSERT INTO urls (url, "user") VALUES ($1, $2) ON CONFLICT (url) DO NOTHING RETURNING id;`,
 		original,
 		userID,
 	).Scan(&id)
@@ -90,8 +96,7 @@ func (d *dbKeeper) AddBatch(userID string, originals []string) (map[string]int, 
 	defer tx.Rollback()
 
 	insStmt, err := tx.Prepare(
-		`INSERT INTO urls (url, users) VALUES ($1, ARRAY[$2]) ON CONFLICT (url) DO UPDATE 
-		SET users=ARRAY_APPEND(urls.users, $2) WHERE NOT urls.users @> ARRAY[$2] RETURNING id;`,
+		`INSERT INTO urls (url, "user") VALUES ($1, $2) ON CONFLICT (url) DO NOTHING RETURNING id;`,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("statement error: %w", err)
@@ -133,10 +138,15 @@ func (d *dbKeeper) AddBatch(userID string, originals []string) (map[string]int, 
 
 func (d *dbKeeper) Get(id int) (string, error) {
 	var original string
+	var deleted bool
 
-	err := d.db.QueryRow("SELECT url FROM urls WHERE id=$1;", id).Scan(&original)
+	err := d.db.QueryRow("SELECT url, deleted FROM urls WHERE id=$1;", id).Scan(&original, &deleted)
 	if err != nil {
 		return "", fmt.Errorf("cannot find url: %w", err)
+	}
+
+	if deleted {
+		return "", new(url.ErrURLDeleted)
 	}
 
 	return original, nil
@@ -145,7 +155,7 @@ func (d *dbKeeper) Get(id int) (string, error) {
 func (d *dbKeeper) GetAllByUser(userID string) (map[string]int, error) {
 	urls := make(map[string]int)
 
-	rows, err := d.db.Query("SELECT id, url FROM urls WHERE $1 = ANY (users);", userID)
+	rows, err := d.db.Query(`SELECT id, url FROM urls WHERE "user" = $1 AND deleted = false;`, userID)
 	if err != nil {
 		return nil, fmt.Errorf("cannot find urls: %w", err)
 	}
@@ -168,6 +178,19 @@ func (d *dbKeeper) GetAllByUser(userID string) (map[string]int, error) {
 	}
 
 	return urls, nil
+}
+
+func (d *dbKeeper) DeleteBatch(userID string, IDs []int) error {
+	_, err := d.db.Exec(
+		`UPDATE urls SET deleted = true WHERE "user" = $1 AND id = ANY ($2);`,
+		userID,
+		IDs,
+	)
+	if err != nil {
+		return fmt.Errorf("db error: %w", err)
+	}
+
+	return nil
 }
 
 func (d *dbKeeper) Ping() error {

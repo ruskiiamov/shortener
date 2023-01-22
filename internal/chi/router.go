@@ -31,6 +31,10 @@ func (rtr *router) POST(pattern string, handler http.Handler) {
 	rtr.mux.Post(pattern, handler.ServeHTTP)
 }
 
+func (rtr *router) DELETE(pattern string, handler http.Handler) {
+	rtr.mux.Delete(pattern, handler.ServeHTTP)
+}
+
 func (rtr *router) GetURLParam(r *http.Request, key string) string {
 	return chi.URLParam(r, key)
 }

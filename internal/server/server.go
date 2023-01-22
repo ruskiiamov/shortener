@@ -10,6 +10,7 @@ type Router interface {
 	http.Handler
 	GET(pattern string, handler http.Handler)
 	POST(pattern string, handler http.Handler)
+	DELETE(pattern string, handler http.Handler)
 	GetURLParam(r *http.Request, key string) string
 	AddMiddlewares(middlewares ...func(http.Handler) http.Handler)
 }
@@ -44,6 +45,7 @@ func NewHandler(u url.Converter, r Router, c Config) *handler {
 	h.router.POST("/api/shorten", h.addURLFromJSON())
 	h.router.POST("/api/shorten/batch", h.addURLBatch())
 	h.router.GET("/api/user/urls", h.getAllURL())
+	h.router.DELETE("/api/user/urls", h.deleteURLBatch())
 	h.router.GET("/ping", h.pingDB())
 
 	return h

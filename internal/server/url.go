@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"log"
 	"net/http"
 
 	"github.com/go-http-utils/headers"
@@ -40,6 +41,10 @@ func (h *handler) getURL() http.HandlerFunc {
 		id := h.router.GetURLParam(r, "id")
 
 		shortURL, err := h.urlConverter.GetOriginal(id)
+		if errors.Is(err, new(url.ErrURLDeleted)) {
+			http.Error(w, err.Error(), http.StatusGone)
+			return
+		}
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
@@ -231,6 +236,39 @@ func (h *handler) getAllURL() http.HandlerFunc {
 		w.Header().Add(headers.ContentType, applicationJSON)
 		w.WriteHeader(http.StatusOK)
 		w.Write(jsonRes)
+	})
+}
+
+func (h *handler) deleteURLBatch() http.HandlerFunc {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+
+		var encodedIDs []string
+		if err := json.Unmarshal(body, &encodedIDs); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+
+		userID, err := r.Cookie(userIDCookieName)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		go func() {
+			err = h.urlConverter.RemoveBatch(userID.Value, encodedIDs)
+			if err != nil {
+				log.Printf("delete URL batch error: userID=%v encodedIDs=%v", userID.Value, encodedIDs)
+				return
+			}
+			log.Printf("URL batch deleted: userID=%v encodedIDs=%v", userID.Value, encodedIDs)
+		}()
+
+		w.WriteHeader(http.StatusAccepted)
 	})
 }
 
