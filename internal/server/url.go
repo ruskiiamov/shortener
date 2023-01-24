@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
-	// "log"
 	"net/http"
 
 	"github.com/go-http-utils/headers"
@@ -263,16 +262,6 @@ func (h *handler) deleteURLBatch() http.HandlerFunc {
 			userID:     userID.Value,
 			encodedIDs: encodedIDs,
 		}
-
-		// go func() {
-		// 	err = h.urlConverter.RemoveBatch(userID.Value, encodedIDs)
-		// 	if err != nil {
-		// 		log.Printf("delete URL batch error: userID=%v encodedIDs=%v", userID.Value, encodedIDs)
-		// 		log.Println(err)
-		// 		return
-		// 	}
-		// 	log.Printf("URL batch deleted: userID=%v encodedIDs=%v", userID.Value, encodedIDs)
-		// }()
 
 		w.WriteHeader(http.StatusAccepted)
 	})
