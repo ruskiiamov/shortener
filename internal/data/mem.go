@@ -5,13 +5,18 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"os"
 	"sync"
+	"time"
 
 	"github.com/ruskiiamov/shortener/internal/url"
 )
 
-const defaultNextID = 1
+const (
+	defaultNextID  = 1
+	fileSavePeriod = 30 * time.Second
+)
 
 type memURL struct {
 	Original string `json:"original"`
@@ -30,14 +35,19 @@ type memKeeper struct {
 	mu       sync.RWMutex
 }
 
-func newMemKeeper(filePath string) (url.DataKeeper, error) {
+func newMemKeeper(filePath string) (m *memKeeper, err error) {
+	defer func() {
+		startPeriodicFileSave(m)
+	}()
+
 	if filePath == "" {
-		return &memKeeper{
+		m = &memKeeper{
 			data: URLData{
 				URLs:   make(map[int]memURL),
 				NextID: defaultNextID,
 			},
-		}, nil
+		}
+		return m, nil
 	}
 
 	file, err := os.OpenFile(filePath, os.O_CREATE|os.O_RDONLY, 0666)
@@ -52,13 +62,14 @@ func newMemKeeper(filePath string) (url.DataKeeper, error) {
 	}
 
 	if len(fileData) == 0 {
-		return &memKeeper{
+		m = &memKeeper{
 			filePath: filePath,
 			data: URLData{
 				URLs:   make(map[int]memURL),
 				NextID: defaultNextID,
 			},
-		}, nil
+		}
+		return m, nil
 	}
 
 	var data URLData
@@ -67,10 +78,27 @@ func newMemKeeper(filePath string) (url.DataKeeper, error) {
 		return nil, fmt.Errorf("cannot parse file data: %w", err)
 	}
 
-	return &memKeeper{
+	m = &memKeeper{
 		filePath: filePath,
 		data:     data,
-	}, nil
+	}
+	return m, nil
+}
+
+func startPeriodicFileSave(m *memKeeper) {
+	if m == nil || m.filePath == "" {
+		return
+	}
+
+	go func() {
+		for {
+			time.Sleep(fileSavePeriod)
+			err := m.saveFile()
+			if err != nil {
+				log.Println("keeper file save error", err)
+			}
+		}
+	}()
 }
 
 func (m *memKeeper) Add(userID, original string) (int, error) {
@@ -88,11 +116,6 @@ func (m *memKeeper) Add(userID, original string) (int, error) {
 	m.data.URLs[id] = memURL{
 		Original: original,
 		User:     userID,
-	}
-
-	err := m.saveFile()
-	if err != nil {
-		return 0, fmt.Errorf("cannot save file: %w", err)
 	}
 
 	return id, nil
@@ -118,11 +141,6 @@ func (m *memKeeper) AddBatch(userID string, originals []string) (map[string]int,
 			User:     userID,
 		}
 		added[original] = id
-	}
-
-	err := m.saveFile()
-	if err != nil {
-		return nil, fmt.Errorf("cannot save file: %w", err)
 	}
 
 	return added, nil
@@ -159,25 +177,22 @@ func (m *memKeeper) GetAllByUser(userID string) (map[string]int, error) {
 	return urls, nil
 }
 
-func (m *memKeeper) DeleteBatch(userID string, IDs []int) error {
+func (m *memKeeper) DeleteBatch(batch map[string][]int) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	for _, id := range IDs {
-		mURL, ok := m.data.URLs[id]
-		if !ok {
-			continue
-		}
+	for userID, IDs := range batch {
+		for _, id := range IDs {
+			mURL, ok := m.data.URLs[id]
+			if !ok {
+				continue
+			}
 
-		if mURL.User == userID {
-			mURL.Deleted = true
-			m.data.URLs[id] = mURL 
+			if mURL.User == userID {
+				mURL.Deleted = true
+				m.data.URLs[id] = mURL
+			}
 		}
-	}
-
-	err := m.saveFile()
-	if err != nil {
-		return fmt.Errorf("cannot save file: %w", err)
 	}
 
 	return nil
@@ -212,7 +227,7 @@ func (m *memKeeper) saveFile() error {
 		return fmt.Errorf("JSON encoding error: %w", err)
 	}
 
-	file, err := os.OpenFile(m.filePath, os.O_WRONLY, 0666)
+	file, err := os.OpenFile(m.filePath, os.O_WRONLY|os.O_TRUNC, 0666)
 	if err != nil {
 		return fmt.Errorf("cannot open file: %w", err)
 	}
@@ -222,6 +237,8 @@ func (m *memKeeper) saveFile() error {
 	if err != nil {
 		return fmt.Errorf("cannot save file: %w", err)
 	}
+
+	log.Println("keeper file saved")
 
 	return nil
 }

@@ -5,6 +5,8 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strconv"
+	"strings"
 	"time"
 
 	_ "github.com/jackc/pgx/v5/stdlib"
@@ -14,7 +16,8 @@ import (
 const pgx = "pgx"
 
 type dbKeeper struct {
-	db *sql.DB
+	db     *sql.DB
+	delBuf map[string]map[int]bool
 }
 
 func newDBKeeper(dsn string) (url.DataKeeper, error) {
@@ -180,11 +183,18 @@ func (d *dbKeeper) GetAllByUser(userID string) (map[string]int, error) {
 	return urls, nil
 }
 
-func (d *dbKeeper) DeleteBatch(userID string, IDs []int) error {
+func (d *dbKeeper) DeleteBatch(batch map[string][]int) error {
+	var values []string
+	for userID, IDs := range batch {
+		for _, id := range IDs {
+			values = append(values, "("+strconv.Itoa(id)+",'"+userID+"')")
+		}
+	}
+	v := strings.Join(values, ",")
+
 	_, err := d.db.Exec(
-		`UPDATE urls SET deleted = true WHERE "user" = $1 AND id = ANY ($2);`,
-		userID,
-		IDs,
+		`UPDATE urls SET deleted = TRUE FROM (VALUES ` + v + `) AS tmp (id, user_id) 
+		WHERE urls.id = tmp.id AND urls.user = tmp.user_id;`,
 	)
 	if err != nil {
 		return fmt.Errorf("db error: %w", err)

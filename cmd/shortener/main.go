@@ -4,6 +4,9 @@ import (
 	"flag"
 	"log"
 	"net/http"
+	"os"
+	"os/signal"
+	"syscall"
 
 	"github.com/caarlos0/env/v6"
 	"github.com/ruskiiamov/shortener/internal/chi"
@@ -52,6 +55,19 @@ func main() {
 		SignKey: config.AuthSignKey,
 	}
 	handler := server.NewHandler(urlConverter, router, serverConfig)
+	defer handler.Close()
 
-	log.Fatal(http.ListenAndServe(config.ServerAddress, handler))
+	go func() {
+		log.Fatal(http.ListenAndServe(config.ServerAddress, handler))
+	}()
+
+	ch := make(chan os.Signal, 1)
+	signal.Notify(ch, os.Interrupt, syscall.SIGTERM)
+
+	for {
+		select {
+		case <-ch:
+			return
+		}
+	}
 }

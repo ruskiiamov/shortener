@@ -2,6 +2,7 @@ package server
 
 import (
 	"net/http"
+	"sync"
 
 	"github.com/ruskiiamov/shortener/internal/url"
 )
@@ -24,10 +25,17 @@ type handler struct {
 	router       Router
 	urlConverter url.Converter
 	baseURL      string
+	delBuf       chan *delBatch
+	w            *sync.WaitGroup
 }
 
 func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	h.router.ServeHTTP(w, r)
+}
+
+func (h *handler) Close() {
+	close(h.delBuf)
+	h.w.Wait()
 }
 
 func NewHandler(u url.Converter, r Router, c Config) *handler {
@@ -35,7 +43,11 @@ func NewHandler(u url.Converter, r Router, c Config) *handler {
 		router:       r,
 		urlConverter: u,
 		baseURL:      c.BaseURL,
+		delBuf:       make(chan *delBatch),
+		w:            &sync.WaitGroup{},
 	}
+
+	h.startDeleteURL(h.w)
 
 	initAuth(c.SignKey)
 	h.router.AddMiddlewares(gzipCompress, auth)

@@ -37,7 +37,8 @@ type DataKeeper interface {
 	AddBatch(userID string, originals []string) (map[string]int, error)
 	Get(id int) (string, error)
 	GetAllByUser(userID string) (map[string]int, error)
-	DeleteBatch(userID string, IDs []int) error
+	// DeleteBatch(userID string, IDs []int) error
+	DeleteBatch(batch map[string][]int) error
 	Ping() error
 	Close() error
 }
@@ -52,7 +53,8 @@ type Converter interface {
 	ShortenBatch(userID string, originals []string) ([]URL, error)
 	GetOriginal(encodedID string) (*URL, error)
 	GetAllByUser(userID string) ([]URL, error)
-	RemoveBatch(userID string, encodedIDs []string) error
+	// RemoveBatch(userID string, encodedIDs []string) error
+	RemoveBatch(batch map[string][]string) error
 	PingKeeper() error
 }
 
@@ -146,23 +148,43 @@ func (c *converter) GetAllByUser(userID string) ([]URL, error) {
 	return result, nil
 }
 
-func (c *converter) RemoveBatch(userID string, encodedIDs []string) error {
-	if len(encodedIDs) == 0 {
+// func (c *converter) RemoveBatch(userID string, encodedIDs []string) error {
+// 	if len(encodedIDs) == 0 {
+// 		return errors.New("empty encodedIDs")
+// 	}
+
+// 	encodedIDs = unique(encodedIDs)
+
+// 	IDs := make([]int, 0, len(encodedIDs))
+// 	for _, encodedID := range encodedIDs {
+// 		id, err := decode(encodedID)
+// 		if err != nil {
+// 			return fmt.Errorf("decoding error: %w", err)
+// 		}
+// 		IDs = append(IDs, id)
+// 	}
+
+// 	return c.dataKeeper.DeleteBatch(userID, IDs)
+// }
+
+func (c *converter) RemoveBatch(batch map[string][]string) error {
+	if len(batch) == 0 {
 		return errors.New("empty encodedIDs")
 	}
 
-	encodedIDs = unique(encodedIDs)
+	decodedBatch := make(map[string][]int)
 
-	IDs := make([]int, 0, len(encodedIDs))
-	for _, encodedID := range encodedIDs {
-		id, err := decode(encodedID)
-		if err != nil {
-			return fmt.Errorf("decoding error: %w", err)
+	for userID, encodedIDs := range batch {
+		for _, encodedID := range encodedIDs {
+			id, err := decode(encodedID)
+			if err != nil {
+				return fmt.Errorf("decoding error: %w", err)
+			}
+			decodedBatch[userID] = append(decodedBatch[userID], id)
 		}
-		IDs = append(IDs, id)
 	}
 
-	return c.dataKeeper.DeleteBatch(userID, IDs)
+	return c.dataKeeper.DeleteBatch(decodedBatch)
 }
 
 func (c *converter) PingKeeper() error {
