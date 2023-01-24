@@ -15,7 +15,7 @@ import (
 
 const (
 	defaultNextID  = 1
-	fileSavePeriod = 30 * time.Second
+	fileSavePeriod = 10 * time.Second
 )
 
 type memURL struct {

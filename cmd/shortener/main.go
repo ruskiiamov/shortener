@@ -63,11 +63,5 @@ func main() {
 
 	ch := make(chan os.Signal, 1)
 	signal.Notify(ch, os.Interrupt, syscall.SIGTERM)
-
-	for {
-		select {
-		case <-ch:
-			return
-		}
-	}
+	<-ch
 }

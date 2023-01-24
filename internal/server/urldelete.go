@@ -3,9 +3,10 @@ package server
 import (
 	"log"
 	"sync"
+	"time"
 )
 
-const threshold = 5
+const deletePeriod = 10 * time.Second
 
 type delBatch struct {
 	userID     string
@@ -15,32 +16,40 @@ type delBatch struct {
 func (h *handler) startDeleteURL(w *sync.WaitGroup) {
 	w.Add(1)
 
+	delCh := make(chan struct{})
+	go func() {
+		for {
+			time.Sleep(deletePeriod)
+			delCh <- struct{}{}
+		}
+	}()
+
 	go func() {
 		buf := make(map[string][]string)
-		count := 0
 
-		for batch := range h.delBuf {
-			if URLs, ok := buf[batch.userID]; ok {
-				buf[batch.userID] = unique(URLs, batch.encodedIDs)
-			} else {
-				buf[batch.userID] = unique(batch.encodedIDs)
+		loop:
+			for {
+				select {
+				case batch, ok := <- h.delBuf:
+					if !ok {
+						break loop
+					}
+					if URLs, ok := buf[batch.userID]; ok {
+						buf[batch.userID] = unique(URLs, batch.encodedIDs)
+					} else {
+						buf[batch.userID] = unique(batch.encodedIDs)
+					}
+				case <-delCh:
+					err := h.urlConverter.RemoveBatch(buf)
+					if err != nil {
+						log.Printf("delete URL batch error: %v\n", err)
+						continue
+					}
+					log.Printf("URL batch deleted\n")
+		
+					buf = make(map[string][]string)
+				}
 			}
-
-			count += len(batch.encodedIDs)
-			if count < threshold {
-				continue
-			}
-
-			err := h.urlConverter.RemoveBatch(buf)
-			if err != nil {
-				log.Printf("delete URL batch error: %v\n", err)
-				continue
-			}
-			log.Printf("URL batch deleted\n")
-
-			buf = make(map[string][]string)
-			count = 0
-		}
 
 		err := h.urlConverter.RemoveBatch(buf)
 		if err != nil {
