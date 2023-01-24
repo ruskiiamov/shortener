@@ -27,29 +27,29 @@ func (h *handler) startDeleteURL(w *sync.WaitGroup) {
 	go func() {
 		buf := make(map[string][]string)
 
-		loop:
-			for {
-				select {
-				case batch, ok := <- h.delBuf:
-					if !ok {
-						break loop
-					}
-					if URLs, ok := buf[batch.userID]; ok {
-						buf[batch.userID] = unique(URLs, batch.encodedIDs)
-					} else {
-						buf[batch.userID] = unique(batch.encodedIDs)
-					}
-				case <-delCh:
-					err := h.urlConverter.RemoveBatch(buf)
-					if err != nil {
-						log.Printf("delete URL batch error: %v\n", err)
-						continue
-					}
-					log.Printf("URL batch deleted\n")
-		
-					buf = make(map[string][]string)
+	loop:
+		for {
+			select {
+			case batch, ok := <-h.delBuf:
+				if !ok {
+					break loop
 				}
+				if URLs, ok := buf[batch.userID]; ok {
+					buf[batch.userID] = unique(URLs, batch.encodedIDs)
+				} else {
+					buf[batch.userID] = unique(batch.encodedIDs)
+				}
+			case <-delCh:
+				err := h.urlConverter.RemoveBatch(buf)
+				if err != nil {
+					log.Printf("delete URL batch error: %v\n", err)
+					continue
+				}
+				log.Printf("URL batch deleted\n")
+
+				buf = make(map[string][]string)
 			}
+		}
 
 		err := h.urlConverter.RemoveBatch(buf)
 		if err != nil {

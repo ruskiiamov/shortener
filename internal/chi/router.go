@@ -14,7 +14,7 @@ type router struct {
 func NewRouter() *router {
 	chiMux := chi.NewMux()
 
-	chiMux.Use(middleware.Logger)
+	chiMux.Use(middleware.Logger, middleware.Recoverer)
 
 	return &router{mux: chiMux}
 }
