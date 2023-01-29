@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"net"
@@ -30,7 +31,7 @@ func init() {
 	}
 
 	mConverter = new(mockedConverter)
-	h := NewHandler(nil, mConverter, chi.NewRouter(), config)
+	h := NewHandler(context.Background(), mConverter, chi.NewRouter(), config)
 
 	ts = httptest.NewUnstartedServer(h)
 	l, err := net.Listen("tcp", testServerAddress)
