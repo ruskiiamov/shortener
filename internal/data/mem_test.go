@@ -1,6 +1,7 @@
 package data
 
 import (
+	"context"
 	"os"
 	"testing"
 
@@ -12,7 +13,7 @@ const fileName = "test_file_storage"
 
 func init() {
 	k, _ := newMemKeeper(fileName)
-	k.Close()
+	k.Close(context.Background())
 	os.Remove(fileName)
 }
 
@@ -69,7 +70,7 @@ func TestMemAdd(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			id, err := keeper.Add(tt.userID, tt.original)
+			id, err := keeper.Add(context.Background(), tt.userID, tt.original)
 
 			if tt.wantErr {
 				var errDupl *url.ErrURLDuplicate
@@ -111,7 +112,7 @@ func TestMemGet(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := keeper.Get(tt.id)
+			got, err := keeper.Get(context.Background(), tt.id)
 
 			if tt.wantErr {
 				assert.Error(t, err)
@@ -143,7 +144,7 @@ func TestGetAllByUser(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := keeper.GetAllByUser(tt.userID)
+			got, err := keeper.GetAllByUser(context.Background(), tt.userID)
 
 			assert.NoError(t, err)
 			assert.Equal(t, tt.want, got)

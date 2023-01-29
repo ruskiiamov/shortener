@@ -1,10 +1,12 @@
 package server
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"io"
 	"net/http"
+	"time"
 
 	"github.com/go-http-utils/headers"
 	"github.com/ruskiiamov/shortener/internal/url"
@@ -37,9 +39,12 @@ type responseAll struct {
 
 func (h *handler) getURL() http.HandlerFunc {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		ctx, cancel := context.WithTimeout(r.Context(), 1*time.Second)
+		defer cancel()
+
 		id := h.router.GetURLParam(r, "id")
 
-		shortURL, err := h.urlConverter.GetOriginal(id)
+		shortURL, err := h.urlConverter.GetOriginal(ctx, id)
 		if errors.Is(err, new(url.ErrURLDeleted)) {
 			http.Error(w, err.Error(), http.StatusGone)
 			return
@@ -56,6 +61,9 @@ func (h *handler) getURL() http.HandlerFunc {
 
 func (h *handler) addURL() http.HandlerFunc {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		ctx, cancel := context.WithTimeout(r.Context(), 1*time.Second)
+		defer cancel()
+
 		body, err := io.ReadAll(r.Body)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
@@ -70,7 +78,7 @@ func (h *handler) addURL() http.HandlerFunc {
 
 		var errDupl *url.ErrURLDuplicate
 
-		shortURL, err := h.urlConverter.Shorten(userID.Value, string(body))
+		shortURL, err := h.urlConverter.Shorten(ctx, userID.Value, string(body))
 		if errors.As(err, &errDupl) {
 			w.WriteHeader(http.StatusConflict)
 			w.Write([]byte(h.baseURL + "/" + errDupl.EncodedID))
@@ -88,6 +96,9 @@ func (h *handler) addURL() http.HandlerFunc {
 
 func (h *handler) addURLFromJSON() http.HandlerFunc {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		ctx, cancel := context.WithTimeout(r.Context(), 1*time.Second)
+		defer cancel()
+
 		body, err := io.ReadAll(r.Body)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
@@ -108,7 +119,7 @@ func (h *handler) addURLFromJSON() http.HandlerFunc {
 
 		var errDupl *url.ErrURLDuplicate
 
-		shortURL, err := h.urlConverter.Shorten(userID.Value, reqData.URL)
+		shortURL, err := h.urlConverter.Shorten(ctx, userID.Value, reqData.URL)
 		if errors.As(err, &errDupl) {
 			resData := responseData{h.baseURL + "/" + errDupl.EncodedID}
 			jsonRes, err := json.Marshal(resData)
@@ -141,6 +152,9 @@ func (h *handler) addURLFromJSON() http.HandlerFunc {
 
 func (h *handler) addURLBatch() http.HandlerFunc {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		ctx, cancel := context.WithTimeout(r.Context(), 1*time.Second)
+		defer cancel()
+
 		body, err := io.ReadAll(r.Body)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
@@ -163,7 +177,7 @@ func (h *handler) addURLBatch() http.HandlerFunc {
 		for _, item := range reqData {
 			originals = append(originals, item.OriginalURL)
 		}
-		shortURLs, err := h.urlConverter.ShortenBatch(userID.Value, originals)
+		shortURLs, err := h.urlConverter.ShortenBatch(ctx, userID.Value, originals)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
@@ -201,13 +215,16 @@ func (h *handler) addURLBatch() http.HandlerFunc {
 
 func (h *handler) getAllURL() http.HandlerFunc {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		ctx, cancel := context.WithTimeout(r.Context(), 1*time.Second)
+		defer cancel()
+
 		userID, err := r.Cookie(userIDCookieName)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 
-		shortURLs, err := h.urlConverter.GetAllByUser(userID.Value)
+		shortURLs, err := h.urlConverter.GetAllByUser(ctx, userID.Value)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
@@ -240,6 +257,9 @@ func (h *handler) getAllURL() http.HandlerFunc {
 
 func (h *handler) deleteURLBatch() http.HandlerFunc {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		ctx, cancel := context.WithTimeout(r.Context(), 1*time.Second)
+		defer cancel()
+
 		body, err := io.ReadAll(r.Body)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
@@ -258,9 +278,15 @@ func (h *handler) deleteURLBatch() http.HandlerFunc {
 			return
 		}
 
-		h.delBuf <- &delBatch{
-			userID:     userID.Value,
-			encodedIDs: encodedIDs,
+		select {
+		case <-ctx.Done():
+			http.Error(w, ctx.Err().Error(), http.StatusInternalServerError)
+			return
+		default:
+			h.delBuf <- &delBatch{
+				userID:     userID.Value,
+				encodedIDs: encodedIDs,
+			}
 		}
 
 		w.WriteHeader(http.StatusAccepted)
@@ -269,7 +295,10 @@ func (h *handler) deleteURLBatch() http.HandlerFunc {
 
 func (h *handler) pingDB() http.HandlerFunc {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if err := h.urlConverter.PingKeeper(); err != nil {
+		ctx, cancel := context.WithTimeout(r.Context(), 1*time.Second)
+		defer cancel()
+
+		if err := h.urlConverter.PingKeeper(ctx); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}

@@ -2,6 +2,7 @@ package server
 
 import (
 	"bytes"
+	"context"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -20,7 +21,7 @@ func testRequest(
 ) (int, string, http.Header) {
 	req, err := http.NewRequest(method, ts.URL+path, bytes.NewBuffer(body))
 	require.NoError(t, err)
-
+	req = req.WithContext(context.Background())
 	if c != nil {
 		req.AddCookie(c)
 	}

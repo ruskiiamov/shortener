@@ -5,8 +5,6 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"strconv"
-	"strings"
 	"time"
 
 	_ "github.com/jackc/pgx/v5/stdlib"
@@ -16,18 +14,20 @@ import (
 const pgx = "pgx"
 
 type dbKeeper struct {
-	db     *sql.DB
-	delBuf map[string]map[int]bool
+	db *sql.DB
 }
 
-func newDBKeeper(dsn string) (url.DataKeeper, error) {
+func newDBKeeper(dsn string) (*dbKeeper, error) {
 	db, err := sql.Open(pgx, dsn)
 	if err != nil {
 		return nil, err
 	}
 
-	if tableDoesntExist(db) {
-		if err := createTable(db); err != nil {
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	if tableDoesntExist(ctx, db) {
+		if err := createTable(ctx, db); err != nil {
 			return nil, err
 		}
 	}
@@ -35,17 +35,15 @@ func newDBKeeper(dsn string) (url.DataKeeper, error) {
 	return &dbKeeper{db: db}, nil
 }
 
-func tableDoesntExist(db *sql.DB) bool {
-	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
-	defer cancel()
-
+func tableDoesntExist(ctx context.Context, db *sql.DB) bool {
 	err := db.QueryRowContext(ctx, "SELECT id FROM urls LIMIT 1;").Err()
 
 	return err != nil
 }
 
-func createTable(db *sql.DB) error {
-	_, err := db.Exec(
+func createTable(ctx context.Context, db *sql.DB) error {
+	_, err := db.ExecContext(
+		ctx,
 		`CREATE TABLE urls (
 			id serial PRIMARY KEY, 
 			url varchar, 
@@ -57,7 +55,7 @@ func createTable(db *sql.DB) error {
 		return fmt.Errorf("cannot create db table: %w", err)
 	}
 
-	_, err = db.Exec("CREATE UNIQUE INDEX url_idx ON urls (url);")
+	_, err = db.ExecContext(ctx, "CREATE UNIQUE INDEX url_idx ON urls (url);")
 	if err != nil {
 		return fmt.Errorf("cannot create index for url: %w", err)
 	}
@@ -65,17 +63,18 @@ func createTable(db *sql.DB) error {
 	return nil
 }
 
-func (d *dbKeeper) Add(userID, original string) (int, error) {
+func (d *dbKeeper) Add(ctx context.Context, userID, original string) (int, error) {
 	var id int
 
-	err := d.db.QueryRow(
+	err := d.db.QueryRowContext(
+		ctx,
 		`INSERT INTO urls (url, "user") VALUES ($1, $2) ON CONFLICT (url) DO NOTHING RETURNING id;`,
 		original,
 		userID,
 	).Scan(&id)
 
 	if errors.Is(err, sql.ErrNoRows) {
-		err = d.db.QueryRow(`SELECT id FROM urls WHERE url=$1;`, original).Scan(&id)
+		err = d.db.QueryRowContext(ctx, `SELECT id FROM urls WHERE url=$1;`, original).Scan(&id)
 		if err != nil {
 			return 0, fmt.Errorf("cannot find url: %w", err)
 		}
@@ -89,7 +88,7 @@ func (d *dbKeeper) Add(userID, original string) (int, error) {
 	return id, nil
 }
 
-func (d *dbKeeper) AddBatch(userID string, originals []string) (map[string]int, error) {
+func (d *dbKeeper) AddBatch(ctx context.Context, userID string, originals []string) (map[string]int, error) {
 	added := make(map[string]int)
 
 	tx, err := d.db.Begin()
@@ -98,7 +97,8 @@ func (d *dbKeeper) AddBatch(userID string, originals []string) (map[string]int, 
 	}
 	defer tx.Rollback()
 
-	insStmt, err := tx.Prepare(
+	insStmt, err := tx.PrepareContext(
+		ctx,
 		`INSERT INTO urls (url, "user") VALUES ($1, $2) ON CONFLICT (url) DO NOTHING RETURNING id;`,
 	)
 	if err != nil {
@@ -106,7 +106,7 @@ func (d *dbKeeper) AddBatch(userID string, originals []string) (map[string]int, 
 	}
 	defer insStmt.Close()
 
-	selStmt, err := tx.Prepare(`SELECT id FROM urls WHERE url=$1;`)
+	selStmt, err := tx.PrepareContext(ctx, `SELECT id FROM urls WHERE url=$1;`)
 	if err != nil {
 		return nil, fmt.Errorf("statement error: %w", err)
 	}
@@ -115,10 +115,10 @@ func (d *dbKeeper) AddBatch(userID string, originals []string) (map[string]int, 
 	var id int
 
 	for _, original := range originals {
-		err = insStmt.QueryRow(original, userID).Scan(&id)
+		err = insStmt.QueryRowContext(ctx, original, userID).Scan(&id)
 
 		if errors.Is(err, sql.ErrNoRows) {
-			err = selStmt.QueryRow(original).Scan(&id)
+			err = selStmt.QueryRowContext(ctx, original).Scan(&id)
 			if err != nil {
 				return nil, fmt.Errorf("cannot find url: %w", err)
 			}
@@ -139,11 +139,11 @@ func (d *dbKeeper) AddBatch(userID string, originals []string) (map[string]int, 
 	return added, nil
 }
 
-func (d *dbKeeper) Get(id int) (string, error) {
+func (d *dbKeeper) Get(ctx context.Context, id int) (string, error) {
 	var original string
 	var deleted bool
 
-	err := d.db.QueryRow("SELECT url, deleted FROM urls WHERE id=$1;", id).Scan(&original, &deleted)
+	err := d.db.QueryRowContext(ctx, "SELECT url, deleted FROM urls WHERE id=$1;", id).Scan(&original, &deleted)
 	if err != nil {
 		return "", fmt.Errorf("cannot find url: %w", err)
 	}
@@ -155,10 +155,10 @@ func (d *dbKeeper) Get(id int) (string, error) {
 	return original, nil
 }
 
-func (d *dbKeeper) GetAllByUser(userID string) (map[string]int, error) {
+func (d *dbKeeper) GetAllByUser(ctx context.Context, userID string) (map[string]int, error) {
 	urls := make(map[string]int)
 
-	rows, err := d.db.Query(`SELECT id, url FROM urls WHERE "user" = $1 AND deleted = false;`, userID)
+	rows, err := d.db.QueryContext(ctx, `SELECT id, url FROM urls WHERE "user" = $1 AND deleted = false;`, userID)
 	if err != nil {
 		return nil, fmt.Errorf("cannot find urls: %w", err)
 	}
@@ -183,30 +183,35 @@ func (d *dbKeeper) GetAllByUser(userID string) (map[string]int, error) {
 	return urls, nil
 }
 
-func (d *dbKeeper) DeleteBatch(batch map[string][]int) error {
-	var values []string
+func (d *dbKeeper) DeleteBatch(ctx context.Context, batch map[string][]int) error {
+	tx, err := d.db.Begin()
+	if err != nil {
+		return fmt.Errorf("transaction error: %w", err)
+	}
+	defer tx.Rollback()
+
+	updStmt, err := tx.PrepareContext(ctx, `UPDATE urls SET deleted = TRUE WHERE "user" = $1 AND id = ANY($2::int[]);`)
+	if err != nil {
+		return fmt.Errorf("statement error: %w", err)
+	}
+	defer updStmt.Close()
+
 	for userID, IDs := range batch {
-		for _, id := range IDs {
-			values = append(values, "("+strconv.Itoa(id)+",'"+userID+"')")
+		_, err = updStmt.ExecContext(ctx, userID, IDs)
+		if err != nil {
+			return fmt.Errorf("update error: %w", err)
 		}
 	}
-	v := strings.Join(values, ",")
 
-	_, err := d.db.Exec(
-		`UPDATE urls SET deleted = TRUE FROM (VALUES ` + v + `) AS tmp (id, user_id) 
-		WHERE urls.id = tmp.id AND urls.user = tmp.user_id;`,
-	)
+	err = tx.Commit()
 	if err != nil {
-		return fmt.Errorf("db error: %w", err)
+		return fmt.Errorf("transaction commit error: %w", err)
 	}
 
 	return nil
 }
 
-func (d *dbKeeper) Ping() error {
-	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
-	defer cancel()
-
+func (d *dbKeeper) Ping(ctx context.Context) error {
 	if err := d.db.PingContext(ctx); err != nil {
 		return err
 	}
@@ -214,6 +219,24 @@ func (d *dbKeeper) Ping() error {
 	return nil
 }
 
-func (d *dbKeeper) Close() error {
-	return d.db.Close()
+func (d *dbKeeper) Close(ctx context.Context) error {
+	closed := make(chan error)
+
+	go func() {
+		closed <- d.db.Close()
+	}()
+
+	for {
+		select {
+		case <-ctx.Done():
+			close(closed)
+			return ctx.Err()
+		case err := <-closed:
+			close(closed)
+			if err != nil {
+				return fmt.Errorf("cannot close DB: %w", err)
+			}
+			return nil
+		}
+	}
 }

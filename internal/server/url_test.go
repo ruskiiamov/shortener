@@ -11,6 +11,7 @@ import (
 	"github.com/ruskiiamov/shortener/internal/chi"
 	"github.com/ruskiiamov/shortener/internal/url"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
 )
 
 const (
@@ -29,7 +30,7 @@ func init() {
 	}
 
 	mConverter = new(mockedConverter)
-	h := NewHandler(mConverter, chi.NewRouter(), config)
+	h := NewHandler(nil, mConverter, chi.NewRouter(), config)
 
 	ts = httptest.NewUnstartedServer(h)
 	l, err := net.Listen("tcp", testServerAddress)
@@ -70,7 +71,7 @@ func TestGetUrl(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			mConverter.On("GetOriginal", tt.encID).Return(tt.res, tt.err)
+			mConverter.On("GetOriginal", mock.Anything, tt.encID).Return(tt.res, tt.err)
 
 			statusCode, _, header := testRequest(t, ts, http.MethodGet, "/"+tt.encID, nil, nil)
 
@@ -124,7 +125,7 @@ func TestAddURL(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			mConverter.On("Shorten", tt.userID, tt.body).Return(tt.res, tt.err)
+			mConverter.On("Shorten", mock.Anything, tt.userID, tt.body).Return(tt.res, tt.err)
 
 			cookie := &http.Cookie{Name: authCookieName, Value: tt.authCookie}
 
@@ -188,7 +189,7 @@ func TestAddURLFromJSON(t *testing.T) {
 				jsonResp = ""
 			}
 
-			mConverter.On("Shorten", tt.userID, tt.url).Return(tt.res, tt.err)
+			mConverter.On("Shorten", mock.Anything, tt.userID, tt.url).Return(tt.res, tt.err)
 
 			cookie := &http.Cookie{Name: authCookieName, Value: tt.authCookie}
 
@@ -248,7 +249,7 @@ func TestGetAllURL(t *testing.T) {
 			}
 			jsonResp, _ := json.Marshal(respData)
 
-			mConverter.On("GetAllByUser", tt.userID).Return(tt.res, tt.err)
+			mConverter.On("GetAllByUser", mock.Anything, tt.userID).Return(tt.res, tt.err)
 
 			cookie := &http.Cookie{Name: authCookieName, Value: tt.authCookie}
 

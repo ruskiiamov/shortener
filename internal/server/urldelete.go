@@ -1,8 +1,8 @@
 package server
 
 import (
+	"context"
 	"log"
-	"sync"
 	"time"
 )
 
@@ -13,52 +13,47 @@ type delBatch struct {
 	encodedIDs []string
 }
 
-func (h *handler) startDeleteURL(w *sync.WaitGroup) {
-	w.Add(1)
+func (h *handler) startDeleteURL(ctx context.Context) {
+	defer close(h.delFinish)
 
-	delCh := make(chan struct{})
-	go func() {
-		for {
-			time.Sleep(deletePeriod)
-			delCh <- struct{}{}
-		}
-	}()
+	buf := make(map[string][]string)
 
-	go func() {
-		buf := make(map[string][]string)
+	defer func() {
+		onCloseCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
 
-	loop:
-		for {
-			select {
-			case batch, ok := <-h.delBuf:
-				if !ok {
-					break loop
-				}
-				if URLs, ok := buf[batch.userID]; ok {
-					buf[batch.userID] = unique(URLs, batch.encodedIDs)
-				} else {
-					buf[batch.userID] = unique(batch.encodedIDs)
-				}
-			case <-delCh:
-				err := h.urlConverter.RemoveBatch(buf)
-				if err != nil {
-					log.Printf("delete URL batch error: %v\n", err)
-					continue
-				}
-				log.Printf("URL batch deleted\n")
-
-				buf = make(map[string][]string)
-			}
-		}
-
-		err := h.urlConverter.RemoveBatch(buf)
+		err := h.urlConverter.RemoveBatch(onCloseCtx, buf)
 		if err != nil {
-			log.Printf("delete URL batch error: %v\n", err)
+			log.Printf("on close delete URL batch error: %v\n", err)
+			return
 		}
 		log.Printf("URL batch deleted on close\n")
-
-		w.Done()
 	}()
+
+	t := time.NewTimer(deletePeriod)
+	for {
+		select {
+		case batch, ok := <-h.delBuf:
+			if !ok {
+				return
+			}
+			if URLs, ok := buf[batch.userID]; ok {
+				buf[batch.userID] = unique(URLs, batch.encodedIDs)
+			} else {
+				buf[batch.userID] = unique(batch.encodedIDs)
+			}
+		case <-t.C:
+			err := h.urlConverter.RemoveBatch(ctx, buf)
+			t.Reset(deletePeriod)
+			if err != nil {
+				log.Printf("delete URL batch error: %v\n", err)
+				continue
+			}
+			log.Printf("URL batch deleted\n")
+
+			buf = make(map[string][]string)
+		}
+	}
 }
 
 func unique(URLs ...[]string) []string {

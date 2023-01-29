@@ -1,8 +1,8 @@
 package server
 
 import (
+	"context"
 	"net/http"
-	"sync"
 
 	"github.com/ruskiiamov/shortener/internal/url"
 )
@@ -26,28 +26,36 @@ type handler struct {
 	urlConverter url.Converter
 	baseURL      string
 	delBuf       chan *delBatch
-	w            *sync.WaitGroup
+	delFinish    chan struct{}
 }
 
 func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	h.router.ServeHTTP(w, r)
 }
 
-func (h *handler) Close() {
+func (h *handler) Close(ctx context.Context) error {
 	close(h.delBuf)
-	h.w.Wait()
+
+	for {
+		select {
+		case <-h.delFinish:
+			return nil
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
 }
 
-func NewHandler(u url.Converter, r Router, c Config) *handler {
+func NewHandler(ctx context.Context, u url.Converter, r Router, c Config) *handler {
 	h := &handler{
 		router:       r,
 		urlConverter: u,
 		baseURL:      c.BaseURL,
 		delBuf:       make(chan *delBatch),
-		w:            &sync.WaitGroup{},
+		delFinish:    make(chan struct{}),
 	}
 
-	h.startDeleteURL(h.w)
+	go h.startDeleteURL(ctx)
 
 	initAuth(c.SignKey)
 	h.router.AddMiddlewares(gzipCompress, auth)

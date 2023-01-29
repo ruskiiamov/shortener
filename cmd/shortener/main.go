@@ -1,19 +1,25 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"github.com/caarlos0/env/v6"
 	"github.com/ruskiiamov/shortener/internal/chi"
 	"github.com/ruskiiamov/shortener/internal/data"
 	"github.com/ruskiiamov/shortener/internal/server"
 	"github.com/ruskiiamov/shortener/internal/url"
+	"golang.org/x/sync/errgroup"
 )
+
+const maxShutdownTime = 3 * time.Second
 
 type Config struct {
 	ServerAddress   string `env:"SERVER_ADDRESS" envDefault:"localhost:8080"`
@@ -39,13 +45,15 @@ func getConfig() *Config {
 }
 
 func main() {
+	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer cancel()
+
 	config := getConfig()
 
 	dataKeeper, err := data.NewKeeper(config.DatabaseDSN, config.FileStoragePath)
 	if err != nil {
 		log.Fatal(err)
 	}
-	defer dataKeeper.Close()
 
 	urlConverter := url.NewConverter(dataKeeper)
 
@@ -54,14 +62,47 @@ func main() {
 		BaseURL: config.BaseURL,
 		SignKey: config.AuthSignKey,
 	}
-	handler := server.NewHandler(urlConverter, router, serverConfig)
-	defer handler.Close()
+	handler := server.NewHandler(ctx, urlConverter, router, serverConfig)
 
-	go func() {
-		log.Fatal(http.ListenAndServe(config.ServerAddress, handler))
-	}()
+	s := &http.Server{
+		Addr:    config.ServerAddress,
+		Handler: handler,
+		BaseContext: func(_ net.Listener) context.Context {
+			return ctx
+		},
+	}
 
-	ch := make(chan os.Signal, 1)
-	signal.Notify(ch, os.Interrupt, syscall.SIGTERM)
-	<-ch
+	g, gCtx := errgroup.WithContext(ctx)
+
+	g.Go(func() error {
+		return s.ListenAndServe()
+	})
+
+	g.Go(func() error {
+		<-gCtx.Done()
+
+		ctx, cancel := context.WithTimeout(context.Background(), maxShutdownTime)
+		defer cancel()
+
+		err = s.Shutdown(ctx)
+		if err != nil {
+			log.Printf("server shutdown error: %s", err)
+		}
+
+		err = handler.Close(ctx)
+		if err != nil {
+			log.Printf("handler close error: %s", err)
+		}
+
+		err = dataKeeper.Close(ctx)
+		if err != nil {
+			log.Printf("data keeper close error: %s", err)
+		}
+
+		return err
+	})
+
+	if err = g.Wait(); err != nil {
+		log.Printf("exit: %s", err)
+	}
 }

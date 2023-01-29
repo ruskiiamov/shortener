@@ -1,6 +1,7 @@
 package data
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -90,20 +91,28 @@ func startPeriodicFileSave(m *memKeeper) {
 		return
 	}
 
+	t := time.NewTimer(fileSavePeriod)
+
 	go func() {
-		for {
-			time.Sleep(fileSavePeriod)
+		for range t.C {
 			err := m.saveFile()
 			if err != nil {
 				log.Println("keeper file save error", err)
 			}
+			t.Reset(fileSavePeriod)
 		}
 	}()
 }
 
-func (m *memKeeper) Add(userID, original string) (int, error) {
+func (m *memKeeper) Add(ctx context.Context, userID, original string) (int, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
+	select {
+	default:
+	case <-ctx.Done():
+		return 0, ctx.Err()
+	}
 
 	matches := m.findMatches([]string{original})
 	if len(matches) != 0 {
@@ -121,9 +130,15 @@ func (m *memKeeper) Add(userID, original string) (int, error) {
 	return id, nil
 }
 
-func (m *memKeeper) AddBatch(userID string, originals []string) (map[string]int, error) {
+func (m *memKeeper) AddBatch(ctx context.Context, userID string, originals []string) (map[string]int, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
+	select {
+	default:
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
 
 	added := make(map[string]int)
 
@@ -146,9 +161,15 @@ func (m *memKeeper) AddBatch(userID string, originals []string) (map[string]int,
 	return added, nil
 }
 
-func (m *memKeeper) Get(id int) (string, error) {
+func (m *memKeeper) Get(ctx context.Context, id int) (string, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
+
+	select {
+	default:
+	case <-ctx.Done():
+		return "", ctx.Err()
+	}
 
 	mURL, ok := m.data.URLs[id]
 	if !ok {
@@ -162,9 +183,15 @@ func (m *memKeeper) Get(id int) (string, error) {
 	return mURL.Original, nil
 }
 
-func (m *memKeeper) GetAllByUser(userID string) (map[string]int, error) {
+func (m *memKeeper) GetAllByUser(ctx context.Context, userID string) (map[string]int, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
+
+	select {
+	default:
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
 
 	urls := make(map[string]int)
 
@@ -177,9 +204,15 @@ func (m *memKeeper) GetAllByUser(userID string) (map[string]int, error) {
 	return urls, nil
 }
 
-func (m *memKeeper) DeleteBatch(batch map[string][]int) error {
+func (m *memKeeper) DeleteBatch(ctx context.Context, batch map[string][]int) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
+	select {
+	default:
+	case <-ctx.Done():
+		return ctx.Err()
+	}
 
 	for userID, IDs := range batch {
 		for _, id := range IDs {
@@ -198,16 +231,34 @@ func (m *memKeeper) DeleteBatch(batch map[string][]int) error {
 	return nil
 }
 
-func (m *memKeeper) Ping() error {
+func (m *memKeeper) Ping(ctx context.Context) error {
+	select {
+	default:
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+
 	return errors.New("memory data keeper is used")
 }
 
-func (m *memKeeper) Close() error {
-	err := m.saveFile()
-	if err != nil {
-		return fmt.Errorf("cannot save file: %w", err)
+func (m *memKeeper) Close(ctx context.Context) error {
+	closed := make(chan error)
+
+	go func() {
+		closed <- m.saveFile()
+	}()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case err := <-closed:
+			if err != nil {
+				return fmt.Errorf("cannot save file: %w", err)
+			}
+			return nil
+		}
 	}
-	return nil
 }
 
 func (m *memKeeper) getNextID() int {

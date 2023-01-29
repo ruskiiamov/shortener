@@ -1,6 +1,7 @@
 package url
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"math/big"
@@ -33,13 +34,13 @@ func (e *ErrURLDeleted) Error() string {
 }
 
 type DataKeeper interface {
-	Add(userID, original string) (int, error)
-	AddBatch(userID string, originals []string) (map[string]int, error)
-	Get(id int) (string, error)
-	GetAllByUser(userID string) (map[string]int, error)
-	DeleteBatch(batch map[string][]int) error
-	Ping() error
-	Close() error
+	Add(ctx context.Context, userID, original string) (int, error)
+	AddBatch(ctx context.Context, userID string, originals []string) (map[string]int, error)
+	Get(ctx context.Context, id int) (string, error)
+	GetAllByUser(ctx context.Context, userID string) (map[string]int, error)
+	DeleteBatch(ctx context.Context, batch map[string][]int) error
+	Ping(ctx context.Context) error
+	Close(ctx context.Context) error
 }
 
 type URL struct {
@@ -48,12 +49,12 @@ type URL struct {
 }
 
 type Converter interface {
-	Shorten(userID, original string) (*URL, error)
-	ShortenBatch(userID string, originals []string) ([]URL, error)
-	GetOriginal(encodedID string) (*URL, error)
-	GetAllByUser(userID string) ([]URL, error)
-	RemoveBatch(batch map[string][]string) error
-	PingKeeper() error
+	Shorten(ctx context.Context, userID, original string) (*URL, error)
+	ShortenBatch(ctx context.Context, userID string, originals []string) ([]URL, error)
+	GetOriginal(ctx context.Context, encodedID string) (*URL, error)
+	GetAllByUser(ctx context.Context, userID string) ([]URL, error)
+	RemoveBatch(ctx context.Context, batch map[string][]string) error
+	PingKeeper(ctx context.Context) error
 }
 
 type converter struct {
@@ -64,14 +65,14 @@ func NewConverter(d DataKeeper) Converter {
 	return &converter{dataKeeper: d}
 }
 
-func (c *converter) Shorten(userID, original string) (*URL, error) {
+func (c *converter) Shorten(ctx context.Context, userID, original string) (*URL, error) {
 	if _, err := neturl.ParseRequestURI(original); err != nil {
 		return nil, fmt.Errorf("URL %s not valid: %w", original, err)
 	}
 
 	var errDupl *ErrURLDuplicate
 
-	id, err := c.dataKeeper.Add(userID, original)
+	id, err := c.dataKeeper.Add(ctx, userID, original)
 	if errors.As(err, &errDupl) {
 		errDupl.EncodedID = encode(errDupl.ID)
 		return nil, errDupl
@@ -83,7 +84,7 @@ func (c *converter) Shorten(userID, original string) (*URL, error) {
 	return &URL{EncodedID: encode(id), Original: original}, nil
 }
 
-func (c *converter) ShortenBatch(userID string, originals []string) ([]URL, error) {
+func (c *converter) ShortenBatch(ctx context.Context, userID string, originals []string) ([]URL, error) {
 	if len(originals) == 0 {
 		return nil, errors.New("empty originals")
 	}
@@ -96,7 +97,7 @@ func (c *converter) ShortenBatch(userID string, originals []string) ([]URL, erro
 		}
 	}
 
-	m, err := c.dataKeeper.AddBatch(userID, originals)
+	m, err := c.dataKeeper.AddBatch(ctx, userID, originals)
 	if err != nil {
 		return nil, fmt.Errorf("URLs adding error: %w", err)
 	}
@@ -112,13 +113,13 @@ func (c *converter) ShortenBatch(userID string, originals []string) ([]URL, erro
 	return result, nil
 }
 
-func (c *converter) GetOriginal(encodedID string) (*URL, error) {
+func (c *converter) GetOriginal(ctx context.Context, encodedID string) (*URL, error) {
 	id, err := decode(encodedID)
 	if err != nil {
 		return nil, fmt.Errorf("decoding error: %w", err)
 	}
 
-	original, err := c.dataKeeper.Get(id)
+	original, err := c.dataKeeper.Get(ctx, id)
 	if err != nil {
 		return nil, fmt.Errorf("data keeper error: %w", err)
 	}
@@ -129,8 +130,8 @@ func (c *converter) GetOriginal(encodedID string) (*URL, error) {
 	}, nil
 }
 
-func (c *converter) GetAllByUser(userID string) ([]URL, error) {
-	m, err := c.dataKeeper.GetAllByUser(userID)
+func (c *converter) GetAllByUser(ctx context.Context, userID string) ([]URL, error) {
+	m, err := c.dataKeeper.GetAllByUser(ctx, userID)
 	if err != nil {
 		return nil, err
 	}
@@ -146,7 +147,7 @@ func (c *converter) GetAllByUser(userID string) ([]URL, error) {
 	return result, nil
 }
 
-func (c *converter) RemoveBatch(batch map[string][]string) error {
+func (c *converter) RemoveBatch(ctx context.Context, batch map[string][]string) error {
 	if len(batch) == 0 {
 		return errors.New("empty encodedIDs")
 	}
@@ -163,11 +164,11 @@ func (c *converter) RemoveBatch(batch map[string][]string) error {
 		}
 	}
 
-	return c.dataKeeper.DeleteBatch(decodedBatch)
+	return c.dataKeeper.DeleteBatch(ctx, decodedBatch)
 }
 
-func (c *converter) PingKeeper() error {
-	return c.dataKeeper.Ping()
+func (c *converter) PingKeeper(ctx context.Context) error {
+	return c.dataKeeper.Ping(ctx)
 }
 
 func encode(id int) string {
