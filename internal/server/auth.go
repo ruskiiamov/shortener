@@ -16,10 +16,10 @@ const (
 	userIDCookieName = "user_id"
 )
 
-var h hash.Hash
+var key string
 
-func initAuth(key string) {
-	h = hmac.New(sha256.New, []byte(key))
+func initAuth(k string) {
+	key = k
 }
 
 func auth(next http.Handler) http.Handler {
@@ -44,9 +44,11 @@ func getOrCreateUserID(w http.ResponseWriter, r *http.Request) (string, error) {
 		return "", err
 	}
 
-	userID, ok := getValidUserID(cookie)
+	h := hmac.New(sha256.New, []byte(key))
+
+	userID, ok := getValidUserID(h, cookie)
 	if !ok {
-		userID, err = createUserID(w)
+		userID, err = createUserID(h, w)
 		if err != nil {
 			return "", nil
 		}
@@ -55,7 +57,7 @@ func getOrCreateUserID(w http.ResponseWriter, r *http.Request) (string, error) {
 	return userID, nil
 }
 
-func getValidUserID(c *http.Cookie) (string, bool) {
+func getValidUserID(h hash.Hash, c *http.Cookie) (string, bool) {
 	if c == nil {
 		return "", false
 	}
@@ -86,7 +88,7 @@ func getValidUserID(c *http.Cookie) (string, bool) {
 	return "", false
 }
 
-func createUserID(w http.ResponseWriter) (string, error) {
+func createUserID(h hash.Hash, w http.ResponseWriter) (string, error) {
 	id, err := uuid.NewV4()
 	if err != nil {
 		return "", err

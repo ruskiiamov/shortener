@@ -1,6 +1,7 @@
 package url
 
 import (
+	"context"
 	"errors"
 	"testing"
 
@@ -68,10 +69,10 @@ func TestShorten(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			mockedDataKeeper := new(mockedDataKeeper)
-			mockedDataKeeper.On("Add", tt.userID, tt.url).Return(tt.res, tt.err)
+			mockedDataKeeper.On("Add", context.Background(), tt.userID, tt.url).Return(tt.res, tt.err)
 
 			c := NewConverter(mockedDataKeeper)
-			got, err := c.Shorten(tt.userID, tt.url)
+			got, err := c.Shorten(context.Background(), tt.userID, tt.url)
 
 			if tt.keeper {
 				mockedDataKeeper.AssertExpectations(t)
@@ -125,10 +126,10 @@ func TestShortenBatch(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			mockedDataKeeper := new(mockedDataKeeper)
-			mockedDataKeeper.On("AddBatch", tt.userID, tt.originals).Return(tt.res, tt.err)
+			mockedDataKeeper.On("AddBatch", context.Background(), tt.userID, tt.originals).Return(tt.res, tt.err)
 
 			c := NewConverter(mockedDataKeeper)
-			got, err := c.ShortenBatch(tt.userID, tt.originals)
+			got, err := c.ShortenBatch(context.Background(), tt.userID, tt.originals)
 
 			if tt.wantErr {
 				assert.Error(t, err)
@@ -176,11 +177,11 @@ func TestGetOriginal(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			mockedDataKeeper.On("Get", tt.id).Return(tt.res, tt.err)
+			mockedDataKeeper.On("Get", context.Background(), tt.id).Return(tt.res, tt.err)
 
 			c := NewConverter(mockedDataKeeper)
 
-			got, err := c.GetOriginal(tt.encID)
+			got, err := c.GetOriginal(context.Background(), tt.encID)
 
 			if tt.wantErr {
 				assert.NotNil(t, err)
@@ -227,11 +228,11 @@ func TestGetAll(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			mockedDataKeeper.On("GetAllByUser", tt.userID).Return(tt.res, tt.err)
+			mockedDataKeeper.On("GetAllByUser", context.Background(), tt.userID).Return(tt.res, tt.err)
 
 			c := NewConverter(mockedDataKeeper)
 
-			got, err := c.GetAllByUser(tt.userID)
+			got, err := c.GetAllByUser(context.Background(), tt.userID)
 
 			if tt.wantErr {
 				assert.NotNil(t, err)

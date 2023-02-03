@@ -14,7 +14,7 @@ type router struct {
 func NewRouter() *router {
 	chiMux := chi.NewMux()
 
-	chiMux.Use(middleware.Logger)
+	chiMux.Use(middleware.Logger, middleware.Recoverer)
 
 	return &router{mux: chiMux}
 }
@@ -29,6 +29,10 @@ func (rtr *router) GET(pattern string, handler http.Handler) {
 
 func (rtr *router) POST(pattern string, handler http.Handler) {
 	rtr.mux.Post(pattern, handler.ServeHTTP)
+}
+
+func (rtr *router) DELETE(pattern string, handler http.Handler) {
+	rtr.mux.Delete(pattern, handler.ServeHTTP)
 }
 
 func (rtr *router) GetURLParam(r *http.Request, key string) string {

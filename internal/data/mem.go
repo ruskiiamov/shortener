@@ -1,30 +1,28 @@
 package data
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"os"
+	"sync"
+	"time"
 
 	"github.com/ruskiiamov/shortener/internal/url"
 )
 
-const defaultNextID = 1
+const (
+	defaultNextID  = 1
+	fileSavePeriod = 10 * time.Second
+)
 
 type memURL struct {
-	Original string   `json:"original"`
-	Users    []string `json:"users"`
-}
-
-func (m *memURL) hasUser(userID string) bool {
-	for _, user := range m.Users {
-		if user == userID {
-			return true
-		}
-	}
-
-	return false
+	Original string `json:"original"`
+	User     string `json:"user"`
+	Deleted  bool   `json:"deleted"`
 }
 
 type URLData struct {
@@ -35,16 +33,22 @@ type URLData struct {
 type memKeeper struct {
 	filePath string
 	data     URLData
+	mu       sync.RWMutex
 }
 
-func newMemKeeper(filePath string) (url.DataKeeper, error) {
+func newMemKeeper(filePath string) (m *memKeeper, err error) {
+	defer func() {
+		startPeriodicFileSave(m)
+	}()
+
 	if filePath == "" {
-		return &memKeeper{
+		m = &memKeeper{
 			data: URLData{
 				URLs:   make(map[int]memURL),
 				NextID: defaultNextID,
 			},
-		}, nil
+		}
+		return m, nil
 	}
 
 	file, err := os.OpenFile(filePath, os.O_CREATE|os.O_RDONLY, 0666)
@@ -59,13 +63,14 @@ func newMemKeeper(filePath string) (url.DataKeeper, error) {
 	}
 
 	if len(fileData) == 0 {
-		return &memKeeper{
+		m = &memKeeper{
 			filePath: filePath,
 			data: URLData{
 				URLs:   make(map[int]memURL),
 				NextID: defaultNextID,
 			},
-		}, nil
+		}
+		return m, nil
 	}
 
 	var data URLData
@@ -74,21 +79,44 @@ func newMemKeeper(filePath string) (url.DataKeeper, error) {
 		return nil, fmt.Errorf("cannot parse file data: %w", err)
 	}
 
-	return &memKeeper{
+	m = &memKeeper{
 		filePath: filePath,
 		data:     data,
-	}, nil
+	}
+	return m, nil
 }
 
-func (m *memKeeper) Add(userID, original string) (int, error) {
+func startPeriodicFileSave(m *memKeeper) {
+	if m == nil || m.filePath == "" {
+		return
+	}
+
+	t := time.NewTimer(fileSavePeriod)
+
+	go func() {
+		for range t.C {
+			err := m.saveFile()
+			if err != nil {
+				log.Println("keeper file save error", err)
+			}
+			t.Reset(fileSavePeriod)
+		}
+	}()
+}
+
+func (m *memKeeper) Add(ctx context.Context, userID, original string) (int, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	select {
+	default:
+	case <-ctx.Done():
+		return 0, ctx.Err()
+	}
+
 	matches := m.findMatches([]string{original})
 	if len(matches) != 0 {
 		id := matches[original]
-		m.addUser(id, userID)
-		err := m.saveFile()
-		if err != nil {
-			return 0, fmt.Errorf("cannot save file: %w", err)
-		}
 		return 0, url.NewErrURLDuplicate(id, original)
 	}
 
@@ -96,25 +124,28 @@ func (m *memKeeper) Add(userID, original string) (int, error) {
 
 	m.data.URLs[id] = memURL{
 		Original: original,
-		Users:    []string{userID},
-	}
-
-	err := m.saveFile()
-	if err != nil {
-		return 0, fmt.Errorf("cannot save file: %w", err)
+		User:     userID,
 	}
 
 	return id, nil
 }
 
-func (m *memKeeper) AddBatch(userID string, originals []string) (map[string]int, error) {
+func (m *memKeeper) AddBatch(ctx context.Context, userID string, originals []string) (map[string]int, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	select {
+	default:
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
+
 	added := make(map[string]int)
 
 	matches := m.findMatches(originals)
 
 	for _, original := range originals {
 		if id, ok := matches[original]; ok {
-			m.addUser(id, userID)
 			added[original] = id
 			continue
 		}
@@ -122,61 +153,112 @@ func (m *memKeeper) AddBatch(userID string, originals []string) (map[string]int,
 		id := m.getNextID()
 		m.data.URLs[id] = memURL{
 			Original: original,
-			Users:    []string{userID},
+			User:     userID,
 		}
 		added[original] = id
-	}
-
-	err := m.saveFile()
-	if err != nil {
-		return nil, fmt.Errorf("cannot save file: %w", err)
 	}
 
 	return added, nil
 }
 
-func (m *memKeeper) Get(id int) (string, error) {
-	memURL, ok := m.data.URLs[id]
+func (m *memKeeper) Get(ctx context.Context, id int) (string, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	select {
+	default:
+	case <-ctx.Done():
+		return "", ctx.Err()
+	}
+
+	mURL, ok := m.data.URLs[id]
 	if !ok {
 		return "", errors.New("wrong id")
 	}
 
-	return memURL.Original, nil
+	if mURL.Deleted {
+		return "", new(url.ErrURLDeleted)
+	}
+
+	return mURL.Original, nil
 }
 
-func (m *memKeeper) GetAllByUser(userID string) (map[string]int, error) {
+func (m *memKeeper) GetAllByUser(ctx context.Context, userID string) (map[string]int, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	select {
+	default:
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
+
 	urls := make(map[string]int)
 
-	for id, memURL := range m.data.URLs {
-		if memURL.hasUser(userID) {
-			urls[memURL.Original] = id
+	for id, mURL := range m.data.URLs {
+		if mURL.User == userID && !mURL.Deleted {
+			urls[mURL.Original] = id
 		}
 	}
 
 	return urls, nil
 }
 
-func (m *memKeeper) Ping() error {
-	return errors.New("memory data keeper is used")
-}
+func (m *memKeeper) DeleteBatch(ctx context.Context, batch map[string][]int) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 
-func (m *memKeeper) Close() error {
-	err := m.saveFile()
-	if err != nil {
-		return fmt.Errorf("cannot save file: %w", err)
+	select {
+	default:
+	case <-ctx.Done():
+		return ctx.Err()
 	}
+
+	for userID, IDs := range batch {
+		for _, id := range IDs {
+			mURL, ok := m.data.URLs[id]
+			if !ok {
+				continue
+			}
+
+			if mURL.User == userID {
+				mURL.Deleted = true
+				m.data.URLs[id] = mURL
+			}
+		}
+	}
+
 	return nil
 }
 
-func (m *memKeeper) addUser(id int, userID string) {
-	memURL := m.data.URLs[id]
-
-	if memURL.hasUser(userID) {
-		return
+func (m *memKeeper) Ping(ctx context.Context) error {
+	select {
+	default:
+	case <-ctx.Done():
+		return ctx.Err()
 	}
 
-	memURL.Users = append(memURL.Users, userID)
-	m.data.URLs[id] = memURL
+	return errors.New("memory data keeper is used")
+}
+
+func (m *memKeeper) Close(ctx context.Context) error {
+	closed := make(chan error)
+
+	go func() {
+		closed <- m.saveFile()
+	}()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case err := <-closed:
+			if err != nil {
+				return fmt.Errorf("cannot save file: %w", err)
+			}
+			return nil
+		}
+	}
 }
 
 func (m *memKeeper) getNextID() int {
@@ -196,7 +278,7 @@ func (m *memKeeper) saveFile() error {
 		return fmt.Errorf("JSON encoding error: %w", err)
 	}
 
-	file, err := os.OpenFile(m.filePath, os.O_WRONLY, 0666)
+	file, err := os.OpenFile(m.filePath, os.O_WRONLY|os.O_TRUNC, 0666)
 	if err != nil {
 		return fmt.Errorf("cannot open file: %w", err)
 	}
@@ -207,15 +289,17 @@ func (m *memKeeper) saveFile() error {
 		return fmt.Errorf("cannot save file: %w", err)
 	}
 
+	log.Println("keeper file saved")
+
 	return nil
 }
 
 func (m *memKeeper) findMatches(originals []string) map[string]int {
 	matches := make(map[string]int)
 
-	for id, memURL := range m.data.URLs {
+	for id, mURL := range m.data.URLs {
 		for _, original := range originals {
-			if memURL.Original == original {
+			if mURL.Original == original {
 				matches[original] = id
 				break
 			}
