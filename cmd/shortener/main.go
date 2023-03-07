@@ -1,3 +1,4 @@
+// URL shortener service
 package main
 
 import (
@@ -22,6 +23,7 @@ import (
 
 const maxShutdownTime = 3 * time.Second
 
+// Config for env parsing.
 type Config struct {
 	ServerAddress   string `env:"SERVER_ADDRESS" envDefault:"localhost:8080"`
 	BaseURL         string `env:"BASE_URL" envDefault:"http://localhost:8080"`
