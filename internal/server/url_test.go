@@ -337,19 +337,19 @@ func TestDeleteURLBatch(t *testing.T) {
 }
 
 func TestPingDB(t *testing.T) {
-	tests := []struct{
-		name string
-		err error
+	tests := []struct {
+		name   string
+		err    error
 		status int
 	}{
 		{
-			name: "ok",
-			err: nil,
+			name:   "ok",
+			err:    nil,
 			status: 200,
 		},
 		{
-			name: "not ok",
-			err: errors.New("some error"),
+			name:   "not ok",
+			err:    errors.New("some error"),
 			status: 500,
 		},
 	}
@@ -357,9 +357,9 @@ func TestPingDB(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			authCookie := "XlBVspVMtREN3fydYOxHRdxJKff1Emw3UwLB5RgQrj9jZmIzMWYzMC1lZmE5LTQyNDQtYjFkNi1lMDRjODQzODc3MWQ="
 			cookie := &http.Cookie{Name: authCookieName, Value: authCookie}
-		
+
 			mConverter.On("PingKeeper", mock.Anything).Return(tt.err).Once()
-		
+
 			statusCode, _, _ := testRequest(t, ts, http.MethodGet, "/ping", nil, cookie)
 
 			assert.Equal(t, tt.status, statusCode)

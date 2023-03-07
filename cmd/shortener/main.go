@@ -46,7 +46,7 @@ func getConfig() *Config {
 }
 
 func main() {
-	go func ()  {
+	go func() {
 		http.ListenAndServe(":9090", nil)
 	}()
 

@@ -262,8 +262,8 @@ func TestRemoveBatch(t *testing.T) {
 			decodedBatch: map[string][]int{
 				"21f923fc-cbbf-4fb1-a05c-21933d307be2": {1, 3},
 			},
-			wantErr:      false,
-			dataErr:      nil,
+			wantErr: false,
+			dataErr: nil,
 		},
 	}
 
