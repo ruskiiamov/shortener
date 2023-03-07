@@ -1,3 +1,4 @@
+// Server is the handler mux for all HTTP requests.
 package server
 
 import (
@@ -7,6 +8,7 @@ import (
 	"github.com/ruskiiamov/shortener/internal/url"
 )
 
+// Router is used by server to set all handlers and middlewares.
 type Router interface {
 	http.Handler
 	GET(pattern string, handler http.Handler)
@@ -16,8 +18,12 @@ type Router interface {
 	AddMiddlewares(middlewares ...func(http.Handler) http.Handler)
 }
 
+// Server config contains base URL and sign key for authorization.
 type Config struct {
+	// Base server URL
 	BaseURL string
+
+	// Key for HMAC sign
 	SignKey string
 }
 
@@ -29,10 +35,12 @@ type handler struct {
 	delFinish    chan struct{}
 }
 
+// ServeHTTP is the method of the http.Handler interface.
 func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	h.router.ServeHTTP(w, r)
 }
 
+// Close closes all server goroutines.
 func (h *handler) Close(ctx context.Context) error {
 	close(h.delBuf)
 
@@ -46,6 +54,7 @@ func (h *handler) Close(ctx context.Context) error {
 	}
 }
 
+// NewHandler returns handler mux for HTTP server
 func NewHandler(ctx context.Context, u url.Converter, r Router, c Config) *handler {
 	h := &handler{
 		router:       r,

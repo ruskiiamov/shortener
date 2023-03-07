@@ -33,7 +33,7 @@ func getKeeper() *memKeeper {
 		},
 	}
 
-	data := URLData{
+	data := urlData{
 		NextID: 4,
 		URLs:   urls,
 	}

@@ -63,6 +63,7 @@ func createTable(ctx context.Context, db *sql.DB) error {
 	return nil
 }
 
+// Add saves URL for one user and returns URL id in DB.
 func (d *dbKeeper) Add(ctx context.Context, userID, original string) (int, error) {
 	var id int
 
@@ -88,6 +89,7 @@ func (d *dbKeeper) Add(ctx context.Context, userID, original string) (int, error
 	return id, nil
 }
 
+// AddBatch saves the URL batch for one user and returns the map whith URL id in DB.
 func (d *dbKeeper) AddBatch(ctx context.Context, userID string, originals []string) (map[string]int, error) {
 	added := make(map[string]int)
 
@@ -139,6 +141,7 @@ func (d *dbKeeper) AddBatch(ctx context.Context, userID string, originals []stri
 	return added, nil
 }
 
+// Get returns URL by id from DB.
 func (d *dbKeeper) Get(ctx context.Context, id int) (string, error) {
 	var original string
 	var deleted bool
@@ -155,6 +158,7 @@ func (d *dbKeeper) Get(ctx context.Context, id int) (string, error) {
 	return original, nil
 }
 
+// GetAllByUser returns all URLs and IDs for ine user from DB.
 func (d *dbKeeper) GetAllByUser(ctx context.Context, userID string) (map[string]int, error) {
 	urls := make(map[string]int)
 
@@ -183,6 +187,7 @@ func (d *dbKeeper) GetAllByUser(ctx context.Context, userID string) (map[string]
 	return urls, nil
 }
 
+// DeleteBatch deletes URL batch for each provided user from DB.
 func (d *dbKeeper) DeleteBatch(ctx context.Context, batch map[string][]int) error {
 	tx, err := d.db.Begin()
 	if err != nil {
@@ -211,6 +216,7 @@ func (d *dbKeeper) DeleteBatch(ctx context.Context, batch map[string][]int) erro
 	return nil
 }
 
+// Ping returns error if DB connection is broken.
 func (d *dbKeeper) Ping(ctx context.Context) error {
 	if err := d.db.PingContext(ctx); err != nil {
 		return err
@@ -219,6 +225,7 @@ func (d *dbKeeper) Ping(ctx context.Context) error {
 	return nil
 }
 
+// Close colses the DB connection and returns error if occurs.
 func (d *dbKeeper) Close(ctx context.Context) error {
 	closed := make(chan error)
 
