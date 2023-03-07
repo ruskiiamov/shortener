@@ -6,6 +6,7 @@ import (
 	"log"
 	"net"
 	"net/http"
+	_ "net/http/pprof"
 	"os"
 	"os/signal"
 	"syscall"
@@ -45,6 +46,10 @@ func getConfig() *Config {
 }
 
 func main() {
+	go func ()  {
+		http.ListenAndServe(":9090", nil)
+	}()
+
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
 

@@ -87,6 +87,45 @@ func TestMemAdd(t *testing.T) {
 	}
 }
 
+func BenchmarkMemAdd(b *testing.B) {
+	keeper := getKeeper()
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		keeper.Add(context.Background(), "some_user_id", "http://shortener777.com")
+	}
+}
+
+func TestMemAddBatch(t *testing.T) {
+	keeper := getKeeper()
+
+	tests := []struct {
+		name      string
+		userID    string
+		originals []string
+		added     map[string]int
+	}{
+		{
+			name:      "ok",
+			userID:    "c7cbe16d-034e-40b9-a2a5-e936851c4282",
+			originals: []string{"http://shortener.com", "http://shortener.com/other"},
+			added: map[string]int{
+				"http://shortener.com":       1,
+				"http://shortener.com/other": 4,
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			added, err := keeper.AddBatch(context.Background(), tt.userID, tt.originals)
+
+			assert.NoError(t, err)
+			assert.Equal(t, tt.added, added)
+		})
+	}
+}
+
 func TestMemGet(t *testing.T) {
 	keeper := getKeeper()
 
@@ -125,7 +164,17 @@ func TestMemGet(t *testing.T) {
 	}
 }
 
-func TestGetAllByUser(t *testing.T) {
+func BenchmarkMemGet(b *testing.B) {
+	keeper := getKeeper()
+
+	b.ResetTimer()
+
+	for i := 0; i < b.N; i++ {
+		keeper.Get(context.Background(), 2)
+	}
+}
+
+func TestMemGetAllByUser(t *testing.T) {
 	keeper := getKeeper()
 
 	tests := []struct {
@@ -150,4 +199,22 @@ func TestGetAllByUser(t *testing.T) {
 			assert.Equal(t, tt.want, got)
 		})
 	}
+}
+
+func TestMemDeleteBatch(t *testing.T) {
+	keeper := getKeeper()
+
+	batch := map[string][]int{"b01ad148-d4da-4b08-9c75-9eb66899119f": {2, 3}}
+
+	err := keeper.DeleteBatch(context.Background(), batch)
+
+	assert.NoError(t, err)
+}
+
+func TestMemPing(t *testing.T) {
+	keeper := getKeeper()
+
+	err := keeper.Ping(context.Background())
+
+	assert.Error(t, err)
 }

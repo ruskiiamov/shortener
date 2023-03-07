@@ -140,7 +140,7 @@ func (m *memKeeper) AddBatch(ctx context.Context, userID string, originals []str
 		return nil, ctx.Err()
 	}
 
-	added := make(map[string]int)
+	added := make(map[string]int, len(originals))
 
 	matches := m.findMatches(originals)
 
@@ -295,7 +295,7 @@ func (m *memKeeper) saveFile() error {
 }
 
 func (m *memKeeper) findMatches(originals []string) map[string]int {
-	matches := make(map[string]int)
+	matches := make(map[string]int, len(originals))
 
 	for id, mURL := range m.data.URLs {
 		for _, original := range originals {
