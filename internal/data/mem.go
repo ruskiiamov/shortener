@@ -295,7 +295,7 @@ func (m *memKeeper) saveFile() error {
 		return fmt.Errorf("cannot open file: %w", err)
 	}
 	defer func() {
-		e:= file.Close()
+		e := file.Close()
 		if e != nil {
 			log.Println(e)
 		}
