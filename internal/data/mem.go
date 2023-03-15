@@ -55,7 +55,12 @@ func newMemKeeper(filePath string) (m *memKeeper, err error) {
 	if err != nil {
 		return nil, fmt.Errorf("cannot open file: %w", err)
 	}
-	defer file.Close()
+	defer func() {
+		e := file.Close()
+		if e != nil {
+			log.Println(e)
+		}
+	}()
 
 	fileData, err := io.ReadAll(file)
 	if err != nil {
@@ -289,7 +294,12 @@ func (m *memKeeper) saveFile() error {
 	if err != nil {
 		return fmt.Errorf("cannot open file: %w", err)
 	}
-	defer file.Close()
+	defer func() {
+		e:= file.Close()
+		if e != nil {
+			log.Println(e)
+		}
+	}()
 
 	_, err = file.Write(fileData)
 	if err != nil {
