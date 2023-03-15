@@ -3,6 +3,7 @@ package server
 import (
 	"compress/gzip"
 	"io"
+	"log"
 	"net/http"
 	"strings"
 
@@ -41,9 +42,17 @@ func gzipCompress(next http.Handler) http.Handler {
 					http.Error(w, err.Error(), http.StatusInternalServerError)
 				}
 			} else {
-				gzr.Reset(r.Body)
+				err = gzr.Reset(r.Body)
+				if err != nil {
+					http.Error(w, err.Error(), http.StatusInternalServerError)
+				}
 			}
-			defer gzr.Close()
+			defer func() {
+				e := gzr.Close()
+				if e != nil {
+					log.Println(e)
+				}
+			}()
 
 			r.Body = io.NopCloser(gzr)
 		}
@@ -62,7 +71,12 @@ func gzipCompress(next http.Handler) http.Handler {
 		} else {
 			gzw.Reset(w)
 		}
-		defer gzw.Close()
+		defer func() {
+			e := gzw.Close()
+			if e != nil {
+				log.Println(e)
+			}
+		}()
 
 		w.Header().Set(headers.ContentEncoding, gzipEnc)
 		next.ServeHTTP(gzipWriter{ResponseWriter: w, Writer: gzw}, r)

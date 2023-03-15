@@ -106,7 +106,7 @@ func (h *handler) addURLFromJSON() http.HandlerFunc {
 		}
 
 		reqData := new(requestData)
-		if err := json.Unmarshal(body, reqData); err != nil {
+		if err = json.Unmarshal(body, reqData); err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
@@ -122,9 +122,9 @@ func (h *handler) addURLFromJSON() http.HandlerFunc {
 		shortURL, err := h.urlConverter.Shorten(ctx, userID.Value, reqData.URL)
 		if errors.As(err, &errDupl) {
 			resData := responseData{h.baseURL + "/" + errDupl.EncodedID}
-			jsonRes, err := json.Marshal(resData)
-			if err != nil {
-				http.Error(w, err.Error(), http.StatusInternalServerError)
+			jsonRes, errM := json.Marshal(resData)
+			if errM != nil {
+				http.Error(w, errM.Error(), http.StatusInternalServerError)
 				return
 			}
 			w.Header().Add(headers.ContentType, applicationJSON)
@@ -162,7 +162,7 @@ func (h *handler) addURLBatch() http.HandlerFunc {
 		}
 
 		var reqData []requestBatch
-		if err := json.Unmarshal(body, &reqData); err != nil {
+		if err = json.Unmarshal(body, &reqData); err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
@@ -267,7 +267,7 @@ func (h *handler) deleteURLBatch() http.HandlerFunc {
 		}
 
 		var encodedIDs []string
-		if err := json.Unmarshal(body, &encodedIDs); err != nil {
+		if err = json.Unmarshal(body, &encodedIDs); err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}

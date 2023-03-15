@@ -1,4 +1,4 @@
-// Server is the handler mux for all HTTP requests.
+// Package server is the handler mux for all HTTP requests.
 package server
 
 import (
@@ -18,7 +18,7 @@ type Router interface {
 	AddMiddlewares(middlewares ...func(http.Handler) http.Handler)
 }
 
-// Server config contains base URL and sign key for authorization.
+// Config contains base URL and sign key for authorization.
 type Config struct {
 	// Base server URL
 	BaseURL string
