@@ -25,14 +25,14 @@ type memURL struct {
 	Deleted  bool   `json:"deleted"`
 }
 
-type URLData struct {
+type urlData struct {
 	URLs   map[int]memURL `json:"urls"`
 	NextID int            `json:"next_id"`
 }
 
 type memKeeper struct {
 	filePath string
-	data     URLData
+	data     urlData
 	mu       sync.RWMutex
 }
 
@@ -43,7 +43,7 @@ func newMemKeeper(filePath string) (m *memKeeper, err error) {
 
 	if filePath == "" {
 		m = &memKeeper{
-			data: URLData{
+			data: urlData{
 				URLs:   make(map[int]memURL),
 				NextID: defaultNextID,
 			},
@@ -65,7 +65,7 @@ func newMemKeeper(filePath string) (m *memKeeper, err error) {
 	if len(fileData) == 0 {
 		m = &memKeeper{
 			filePath: filePath,
-			data: URLData{
+			data: urlData{
 				URLs:   make(map[int]memURL),
 				NextID: defaultNextID,
 			},
@@ -73,7 +73,7 @@ func newMemKeeper(filePath string) (m *memKeeper, err error) {
 		return m, nil
 	}
 
-	var data URLData
+	var data urlData
 	err = json.Unmarshal(fileData, &data)
 	if err != nil {
 		return nil, fmt.Errorf("cannot parse file data: %w", err)
@@ -104,6 +104,7 @@ func startPeriodicFileSave(m *memKeeper) {
 	}()
 }
 
+// Add saves URL for user in memory storage and returns URL id.
 func (m *memKeeper) Add(ctx context.Context, userID, original string) (int, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -130,6 +131,7 @@ func (m *memKeeper) Add(ctx context.Context, userID, original string) (int, erro
 	return id, nil
 }
 
+// AddBatch saves URL batch for user in memory storage and returns URL IDs.
 func (m *memKeeper) AddBatch(ctx context.Context, userID string, originals []string) (map[string]int, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -140,7 +142,7 @@ func (m *memKeeper) AddBatch(ctx context.Context, userID string, originals []str
 		return nil, ctx.Err()
 	}
 
-	added := make(map[string]int)
+	added := make(map[string]int, len(originals))
 
 	matches := m.findMatches(originals)
 
@@ -161,6 +163,7 @@ func (m *memKeeper) AddBatch(ctx context.Context, userID string, originals []str
 	return added, nil
 }
 
+// Get returns URL by id from memory storage.
 func (m *memKeeper) Get(ctx context.Context, id int) (string, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
@@ -183,6 +186,7 @@ func (m *memKeeper) Get(ctx context.Context, id int) (string, error) {
 	return mURL.Original, nil
 }
 
+// GetAllByUser returns all URL IDs for user from memory storage.
 func (m *memKeeper) GetAllByUser(ctx context.Context, userID string) (map[string]int, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
@@ -204,6 +208,7 @@ func (m *memKeeper) GetAllByUser(ctx context.Context, userID string) (map[string
 	return urls, nil
 }
 
+// DeleteBatch deletes URL batch from memory storage.
 func (m *memKeeper) DeleteBatch(ctx context.Context, batch map[string][]int) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -231,6 +236,7 @@ func (m *memKeeper) DeleteBatch(ctx context.Context, batch map[string][]int) err
 	return nil
 }
 
+// Ping always returns error because it is not a DB connection.
 func (m *memKeeper) Ping(ctx context.Context) error {
 	select {
 	default:
@@ -241,6 +247,7 @@ func (m *memKeeper) Ping(ctx context.Context) error {
 	return errors.New("memory data keeper is used")
 }
 
+// Close dumps all data to the file.
 func (m *memKeeper) Close(ctx context.Context) error {
 	closed := make(chan error)
 
@@ -295,7 +302,7 @@ func (m *memKeeper) saveFile() error {
 }
 
 func (m *memKeeper) findMatches(originals []string) map[string]int {
-	matches := make(map[string]int)
+	matches := make(map[string]int, len(originals))
 
 	for id, mURL := range m.data.URLs {
 		for _, original := range originals {

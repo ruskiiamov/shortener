@@ -1,3 +1,4 @@
+// URL shortener service
 package main
 
 import (
@@ -6,6 +7,7 @@ import (
 	"log"
 	"net"
 	"net/http"
+	_ "net/http/pprof"
 	"os"
 	"os/signal"
 	"syscall"
@@ -21,6 +23,7 @@ import (
 
 const maxShutdownTime = 3 * time.Second
 
+// Config for env parsing.
 type Config struct {
 	ServerAddress   string `env:"SERVER_ADDRESS" envDefault:"localhost:8080"`
 	BaseURL         string `env:"BASE_URL" envDefault:"http://localhost:8080"`
@@ -45,6 +48,10 @@ func getConfig() *Config {
 }
 
 func main() {
+	go func() {
+		http.ListenAndServe(":9090", nil)
+	}()
+
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
 

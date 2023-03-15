@@ -1,3 +1,4 @@
+// URL is the core URL shortener logic.
 package url
 
 import (
@@ -10,16 +11,24 @@ import (
 
 const base62 = 62
 
+// Error for trying tos shorten existing URL. Contains existing URL data.
 type ErrURLDuplicate struct {
-	ID        int
+	// URL id in data storage.
+	ID int
+
+	// URL id for url.
 	EncodedID string
-	URL       string
+
+	// Original URL.
+	URL string
 }
 
+// Error implements error interface.
 func (e *ErrURLDuplicate) Error() string {
 	return fmt.Sprintf("URL duplicate %s id=%d", e.URL, e.ID)
 }
 
+// NewErrURLDuplicate returns new error object.
 func NewErrURLDuplicate(id int, original string) *ErrURLDuplicate {
 	return &ErrURLDuplicate{
 		ID:  id,
@@ -27,12 +36,15 @@ func NewErrURLDuplicate(id int, original string) *ErrURLDuplicate {
 	}
 }
 
+// Error for trying to get deleted URL.
 type ErrURLDeleted struct{}
 
+// Error implements error interface.
 func (e *ErrURLDeleted) Error() string {
 	return "URL deleted"
 }
 
+// DataKeeper is data storage for URLs.
 type DataKeeper interface {
 	Add(ctx context.Context, userID, original string) (int, error)
 	AddBatch(ctx context.Context, userID string, originals []string) (map[string]int, error)
@@ -43,11 +55,16 @@ type DataKeeper interface {
 	Close(ctx context.Context) error
 }
 
+// URL is the core entity for URL shortener.
 type URL struct {
+	// EncodedID is used in shortened URL.
 	EncodedID string
-	Original  string
+
+	// Original is the original URL.
+	Original string
 }
 
+// Converter is the core logic to operate with URL.
 type Converter interface {
 	Shorten(ctx context.Context, userID, original string) (*URL, error)
 	ShortenBatch(ctx context.Context, userID string, originals []string) ([]URL, error)
@@ -61,10 +78,13 @@ type converter struct {
 	dataKeeper DataKeeper
 }
 
+// Converter returns object that implements Converter interface.
 func NewConverter(d DataKeeper) Converter {
 	return &converter{dataKeeper: d}
 }
 
+// Shorten returns URL object with encoded id or ErrURLDuplicate in case of
+// trying to shorten existing URL.
 func (c *converter) Shorten(ctx context.Context, userID, original string) (*URL, error) {
 	if _, err := neturl.ParseRequestURI(original); err != nil {
 		return nil, fmt.Errorf("URL %s not valid: %w", original, err)
@@ -84,6 +104,7 @@ func (c *converter) Shorten(ctx context.Context, userID, original string) (*URL,
 	return &URL{EncodedID: encode(id), Original: original}, nil
 }
 
+// ShortenBatch returns a slice of URL objects with shortened IDs.
 func (c *converter) ShortenBatch(ctx context.Context, userID string, originals []string) ([]URL, error) {
 	if len(originals) == 0 {
 		return nil, errors.New("empty originals")
@@ -113,6 +134,7 @@ func (c *converter) ShortenBatch(ctx context.Context, userID string, originals [
 	return result, nil
 }
 
+// GetOriginal returns URL object by shortened id.
 func (c *converter) GetOriginal(ctx context.Context, encodedID string) (*URL, error) {
 	id, err := decode(encodedID)
 	if err != nil {
@@ -130,6 +152,7 @@ func (c *converter) GetOriginal(ctx context.Context, encodedID string) (*URL, er
 	}, nil
 }
 
+// GetAllByUser returns a slice of URL objects with all user URLs.
 func (c *converter) GetAllByUser(ctx context.Context, userID string) ([]URL, error) {
 	m, err := c.dataKeeper.GetAllByUser(ctx, userID)
 	if err != nil {
@@ -147,6 +170,7 @@ func (c *converter) GetAllByUser(ctx context.Context, userID string) ([]URL, err
 	return result, nil
 }
 
+// RemoveBatch removes URL batch by encoded IDs.
 func (c *converter) RemoveBatch(ctx context.Context, batch map[string][]string) error {
 	if len(batch) == 0 {
 		return errors.New("empty encodedIDs")
@@ -167,6 +191,7 @@ func (c *converter) RemoveBatch(ctx context.Context, batch map[string][]string) 
 	return c.dataKeeper.DeleteBatch(ctx, decodedBatch)
 }
 
+// PingKeeper checks the data storage connection.
 func (c *converter) PingKeeper(ctx context.Context) error {
 	return c.dataKeeper.Ping(ctx)
 }

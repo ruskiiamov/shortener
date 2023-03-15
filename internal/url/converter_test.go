@@ -196,7 +196,7 @@ func TestGetOriginal(t *testing.T) {
 	}
 }
 
-func TestGetAll(t *testing.T) {
+func TestGetAllByUser(t *testing.T) {
 	tests := []struct {
 		name    string
 		userID  string
@@ -242,6 +242,47 @@ func TestGetAll(t *testing.T) {
 
 			assert.Nil(t, err)
 			assert.ElementsMatch(t, tt.want, got)
+		})
+	}
+}
+
+func TestRemoveBatch(t *testing.T) {
+	tests := []struct {
+		name         string
+		batch        map[string][]string
+		decodedBatch map[string][]int
+		wantErr      bool
+		dataErr      error
+	}{
+		{
+			name: "ok",
+			batch: map[string][]string{
+				"21f923fc-cbbf-4fb1-a05c-21933d307be2": {"1", "3"},
+			},
+			decodedBatch: map[string][]int{
+				"21f923fc-cbbf-4fb1-a05c-21933d307be2": {1, 3},
+			},
+			wantErr: false,
+			dataErr: nil,
+		},
+	}
+
+	mockedDataKeeper := new(mockedDataKeeper)
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mockedDataKeeper.On("DeleteBatch", context.Background(), tt.decodedBatch).Return(tt.dataErr).Once()
+			c := NewConverter(mockedDataKeeper)
+
+			err := c.RemoveBatch(context.Background(), tt.batch)
+
+			mockedDataKeeper.AssertExpectations(t)
+
+			if tt.wantErr {
+				assert.Error(t, err)
+			}
+
+			assert.NoError(t, err)
 		})
 	}
 }
