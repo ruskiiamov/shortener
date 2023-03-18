@@ -4,6 +4,7 @@ package main
 import (
 	"context"
 	"flag"
+	"fmt"
 	"log"
 	"net"
 	"net/http"
@@ -22,6 +23,12 @@ import (
 )
 
 const maxShutdownTime = 3 * time.Second
+
+var (
+	buildVersion string = `"N/A"`
+	buildDate    string = `"N/A"`
+	buildCommit  string = `"N/A"`
+)
 
 // Config for env parsing.
 type Config struct {
@@ -51,6 +58,8 @@ func main() {
 	go func() {
 		http.ListenAndServe(":9090", nil)
 	}()
+
+	fmt.Printf("Build version: %s\nBuild date: %s\nBuild commit: %s\n", buildVersion, buildDate, buildCommit)
 
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
