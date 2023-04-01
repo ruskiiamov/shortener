@@ -12,10 +12,10 @@ import (
 
 // Config for env parsing.
 type Config struct {
-	ServerAddress   string `env:"SERVER_ADDRESS" json:"server_address"`
-	BaseURL         string `env:"BASE_URL" json:"base_url"`
+	ServerAddress   string `env:"SERVER_ADDRESS" envDefault:"localhost:8080" json:"server_address"`
+	BaseURL         string `env:"BASE_URL" envDefault:"http://localhost:8080" json:"base_url"`
 	FileStoragePath string `env:"FILE_STORAGE_PATH" json:"file_storage_path"`
-	AuthSignKey     string `env:"AUTH_SIGN_KEY" json:"auth_sign_key"`
+	AuthSignKey     string `env:"AUTH_SIGN_KEY" envDefault:"secret_key" json:"auth_sign_key"`
 	DatabaseDSN     string `env:"DATABASE_DSN" json:"database_dsn"`
 	EnableHTTPS     bool   `env:"ENABLE_HTTPS" json:"enable_https"`
 	Config          string `env:"CONFIG"`
