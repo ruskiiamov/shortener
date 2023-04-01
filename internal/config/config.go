@@ -14,6 +14,7 @@ type Config struct {
 	FileStoragePath string `env:"FILE_STORAGE_PATH"`
 	AuthSignKey     string `env:"AUTH_SIGN_KEY" envDefault:"secret_key"`
 	DatabaseDSN     string `env:"DATABASE_DSN"`
+	EnableHTTPS     bool   `env:"ENABLE_HTTPS"`
 }
 
 // Load returns structure with configuration parameters.
@@ -25,8 +26,9 @@ func Load() *Config {
 	flag.StringVar(&config.ServerAddress, "a", config.ServerAddress, "Server address")
 	flag.StringVar(&config.BaseURL, "b", config.BaseURL, "Base URL")
 	flag.StringVar(&config.FileStoragePath, "f", config.FileStoragePath, "File storage path")
-	flag.StringVar(&config.AuthSignKey, "s", config.AuthSignKey, "Auth sign key")
+	flag.StringVar(&config.AuthSignKey, "k", config.AuthSignKey, "Auth sign key")
 	flag.StringVar(&config.DatabaseDSN, "d", config.DatabaseDSN, "Database DSN")
+	flag.BoolVar(&config.EnableHTTPS, "s", config.EnableHTTPS, "Enables HTTPS")
 	flag.Parse()
 
 	return &config

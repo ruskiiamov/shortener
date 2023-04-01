@@ -18,6 +18,7 @@ import (
 	"github.com/ruskiiamov/shortener/internal/data"
 	"github.com/ruskiiamov/shortener/internal/server"
 	"github.com/ruskiiamov/shortener/internal/url"
+	"golang.org/x/crypto/acme/autocert"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -50,17 +51,23 @@ func main() {
 	router := chi.NewRouter()
 	handler := server.NewHandler(ctx, urlConverter, router, config.BaseURL, config.AuthSignKey)
 
+	manager := &autocert.Manager{Prompt: autocert.AcceptTOS}
+
 	s := &http.Server{
 		Addr:    config.ServerAddress,
 		Handler: handler,
 		BaseContext: func(_ net.Listener) context.Context {
 			return ctx
 		},
+		TLSConfig: manager.TLSConfig(),
 	}
 
 	g, gCtx := errgroup.WithContext(ctx)
 
 	g.Go(func() error {
+		if config.EnableHTTPS {
+			return s.ListenAndServeTLS("", "")
+		}
 		return s.ListenAndServe()
 	})
 
