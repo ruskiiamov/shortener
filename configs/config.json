@@ -1,6 +1,6 @@
 {
     "server_address": "localhost:8080",
-    "base_url": "http://localhost",
+    "base_url": "http://localhost:8080",
     "file_storage_path": "",
     "auth_sign_key": "secret_key_test",
     "database_dsn": "",
