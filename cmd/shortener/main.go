@@ -40,7 +40,10 @@ func main() {
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
 
-	config := config.Load()
+	config, err := config.Load()
+	if err != nil {
+		log.Fatal(err)
+	}
 
 	dataKeeper, err := data.NewKeeper(config.DatabaseDSN, config.FileStoragePath)
 	if err != nil {
