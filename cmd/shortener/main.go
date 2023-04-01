@@ -3,7 +3,7 @@ package main
 
 import (
 	"context"
-	"flag"
+	"fmt"
 	"log"
 	"net"
 	"net/http"
@@ -13,8 +13,8 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/caarlos0/env/v6"
 	"github.com/ruskiiamov/shortener/internal/chi"
+	"github.com/ruskiiamov/shortener/internal/config"
 	"github.com/ruskiiamov/shortener/internal/data"
 	"github.com/ruskiiamov/shortener/internal/server"
 	"github.com/ruskiiamov/shortener/internal/url"
@@ -23,39 +23,23 @@ import (
 
 const maxShutdownTime = 3 * time.Second
 
-// Config for env parsing.
-type Config struct {
-	ServerAddress   string `env:"SERVER_ADDRESS" envDefault:"localhost:8080"`
-	BaseURL         string `env:"BASE_URL" envDefault:"http://localhost:8080"`
-	FileStoragePath string `env:"FILE_STORAGE_PATH"`
-	AuthSignKey     string `env:"AUTH_SIGN_KEY" envDefault:"secret_key"`
-	DatabaseDSN     string `env:"DATABASE_DSN"`
-}
-
-func getConfig() *Config {
-	var config Config
-
-	env.Parse(&config)
-
-	flag.StringVar(&config.ServerAddress, "a", config.ServerAddress, "Server address")
-	flag.StringVar(&config.BaseURL, "b", config.BaseURL, "Base URL")
-	flag.StringVar(&config.FileStoragePath, "f", config.FileStoragePath, "File storage path")
-	flag.StringVar(&config.AuthSignKey, "s", config.AuthSignKey, "Auth sign key")
-	flag.StringVar(&config.DatabaseDSN, "d", config.DatabaseDSN, "Database DSN")
-	flag.Parse()
-
-	return &config
-}
+var (
+	buildVersion string = `"N/A"`
+	buildDate    string = `"N/A"`
+	buildCommit  string = `"N/A"`
+)
 
 func main() {
 	go func() {
 		http.ListenAndServe(":9090", nil)
 	}()
 
+	fmt.Printf("Build version: %s\nBuild date: %s\nBuild commit: %s\n", buildVersion, buildDate, buildCommit)
+
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
 
-	config := getConfig()
+	config := config.Load()
 
 	dataKeeper, err := data.NewKeeper(config.DatabaseDSN, config.FileStoragePath)
 	if err != nil {
@@ -63,13 +47,8 @@ func main() {
 	}
 
 	urlConverter := url.NewConverter(dataKeeper)
-
 	router := chi.NewRouter()
-	serverConfig := server.Config{
-		BaseURL: config.BaseURL,
-		SignKey: config.AuthSignKey,
-	}
-	handler := server.NewHandler(ctx, urlConverter, router, serverConfig)
+	handler := server.NewHandler(ctx, urlConverter, router, config.BaseURL, config.AuthSignKey)
 
 	s := &http.Server{
 		Addr:    config.ServerAddress,

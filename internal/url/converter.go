@@ -1,4 +1,4 @@
-// URL is the core URL shortener logic.
+// Package url is the core URL shortener logic.
 package url
 
 import (
@@ -11,7 +11,7 @@ import (
 
 const base62 = 62
 
-// Error for trying tos shorten existing URL. Contains existing URL data.
+// ErrURLDuplicate for trying tos shorten existing URL. Contains existing URL data.
 type ErrURLDuplicate struct {
 	// URL id in data storage.
 	ID int
@@ -36,7 +36,7 @@ func NewErrURLDuplicate(id int, original string) *ErrURLDuplicate {
 	}
 }
 
-// Error for trying to get deleted URL.
+// ErrURLDeleted for trying to get deleted URL.
 type ErrURLDeleted struct{}
 
 // Error implements error interface.
@@ -78,7 +78,7 @@ type converter struct {
 	dataKeeper DataKeeper
 }
 
-// Converter returns object that implements Converter interface.
+// NewConverter returns object that implements Converter interface.
 func NewConverter(d DataKeeper) Converter {
 	return &converter{dataKeeper: d}
 }

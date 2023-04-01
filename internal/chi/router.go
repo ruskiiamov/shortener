@@ -1,4 +1,4 @@
-// Package router is a HTTP router
+// Package chi is a HTTP router
 package chi
 
 import (

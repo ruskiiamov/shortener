@@ -1,4 +1,4 @@
-// Server is the handler mux for all HTTP requests.
+// Package server is the handler mux for all HTTP requests.
 package server
 
 import (
@@ -16,15 +16,6 @@ type Router interface {
 	DELETE(pattern string, handler http.Handler)
 	GetURLParam(r *http.Request, key string) string
 	AddMiddlewares(middlewares ...func(http.Handler) http.Handler)
-}
-
-// Server config contains base URL and sign key for authorization.
-type Config struct {
-	// Base server URL
-	BaseURL string
-
-	// Key for HMAC sign
-	SignKey string
 }
 
 type handler struct {
@@ -55,18 +46,18 @@ func (h *handler) Close(ctx context.Context) error {
 }
 
 // NewHandler returns handler mux for HTTP server
-func NewHandler(ctx context.Context, u url.Converter, r Router, c Config) *handler {
+func NewHandler(ctx context.Context, u url.Converter, r Router, baseURL, signKey string) *handler {
 	h := &handler{
 		router:       r,
 		urlConverter: u,
-		baseURL:      c.BaseURL,
+		baseURL:      baseURL,
 		delBuf:       make(chan *delBatch),
 		delFinish:    make(chan struct{}),
 	}
 
 	go h.startDeleteURL(ctx)
 
-	initAuth(c.SignKey)
+	initAuth(signKey)
 	h.router.AddMiddlewares(gzipCompress, auth)
 
 	h.router.GET("/{id}", h.getURL())

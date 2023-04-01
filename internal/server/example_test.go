@@ -21,12 +21,7 @@ func Example() {
 
 	router := chi.NewRouter()
 
-	serverConfig := server.Config{
-		BaseURL: "http://localhost:8080",
-		SignKey: "secret_key",
-	}
-
-	handler := server.NewHandler(context.Background(), urlConverter, router, serverConfig)
+	handler := server.NewHandler(context.Background(), urlConverter, router, "http://localhost:8080", "secret_key")
 
 	server := &http.Server{
 		Addr:    ":8080",

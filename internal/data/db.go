@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"log"
 	"time"
 
 	_ "github.com/jackc/pgx/v5/stdlib"
@@ -97,7 +98,12 @@ func (d *dbKeeper) AddBatch(ctx context.Context, userID string, originals []stri
 	if err != nil {
 		return nil, fmt.Errorf("transaction error: %w", err)
 	}
-	defer tx.Rollback()
+	defer func() {
+		e := tx.Rollback()
+		if e != nil {
+			log.Println(e)
+		}
+	}()
 
 	insStmt, err := tx.PrepareContext(
 		ctx,
@@ -106,13 +112,23 @@ func (d *dbKeeper) AddBatch(ctx context.Context, userID string, originals []stri
 	if err != nil {
 		return nil, fmt.Errorf("statement error: %w", err)
 	}
-	defer insStmt.Close()
+	defer func() {
+		e := insStmt.Close()
+		if e != nil {
+			log.Println(err)
+		}
+	}()
 
 	selStmt, err := tx.PrepareContext(ctx, `SELECT id FROM urls WHERE url=$1;`)
 	if err != nil {
 		return nil, fmt.Errorf("statement error: %w", err)
 	}
-	defer selStmt.Close()
+	defer func() {
+		e := selStmt.Close()
+		if e != nil {
+			log.Println(e)
+		}
+	}()
 
 	var id int
 
@@ -193,13 +209,23 @@ func (d *dbKeeper) DeleteBatch(ctx context.Context, batch map[string][]int) erro
 	if err != nil {
 		return fmt.Errorf("transaction error: %w", err)
 	}
-	defer tx.Rollback()
+	defer func() {
+		e := tx.Rollback()
+		if e != nil {
+			log.Println(e)
+		}
+	}()
 
 	updStmt, err := tx.PrepareContext(ctx, `UPDATE urls SET deleted = TRUE WHERE "user" = $1 AND id = ANY($2::int[]);`)
 	if err != nil {
 		return fmt.Errorf("statement error: %w", err)
 	}
-	defer updStmt.Close()
+	defer func() {
+		e := updStmt.Close()
+		if e != nil {
+			log.Println(e)
+		}
+	}()
 
 	for userID, IDs := range batch {
 		_, err = updStmt.ExecContext(ctx, userID, IDs)

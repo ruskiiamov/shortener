@@ -37,10 +37,6 @@ type memKeeper struct {
 }
 
 func newMemKeeper(filePath string) (m *memKeeper, err error) {
-	defer func() {
-		startPeriodicFileSave(m)
-	}()
-
 	if filePath == "" {
 		m = &memKeeper{
 			data: urlData{
@@ -55,7 +51,12 @@ func newMemKeeper(filePath string) (m *memKeeper, err error) {
 	if err != nil {
 		return nil, fmt.Errorf("cannot open file: %w", err)
 	}
-	defer file.Close()
+	defer func() {
+		e := file.Close()
+		if e != nil {
+			log.Println(e)
+		}
+	}()
 
 	fileData, err := io.ReadAll(file)
 	if err != nil {
@@ -83,6 +84,9 @@ func newMemKeeper(filePath string) (m *memKeeper, err error) {
 		filePath: filePath,
 		data:     data,
 	}
+
+	startPeriodicFileSave(m)
+
 	return m, nil
 }
 
@@ -280,16 +284,21 @@ func (m *memKeeper) saveFile() error {
 		return nil
 	}
 
-	fileData, err := json.Marshal(m.data)
-	if err != nil {
-		return fmt.Errorf("JSON encoding error: %w", err)
-	}
-
 	file, err := os.OpenFile(m.filePath, os.O_WRONLY|os.O_TRUNC, 0666)
 	if err != nil {
 		return fmt.Errorf("cannot open file: %w", err)
 	}
-	defer file.Close()
+	defer func() {
+		e := file.Close()
+		if e != nil {
+			log.Println(e)
+		}
+	}()
+
+	fileData, err := json.Marshal(m.data)
+	if err != nil {
+		return fmt.Errorf("JSON encoding error: %w", err)
+	}
 
 	_, err = file.Write(fileData)
 	if err != nil {

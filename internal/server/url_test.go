@@ -25,13 +25,8 @@ var mConverter *mockedConverter
 var ts *httptest.Server
 
 func init() {
-	config := Config{
-		BaseURL: testBaseURL,
-		SignKey: testSignKey,
-	}
-
 	mConverter = new(mockedConverter)
-	h := NewHandler(context.Background(), mConverter, chi.NewRouter(), config)
+	h := NewHandler(context.Background(), mConverter, chi.NewRouter(), testBaseURL, testSignKey)
 
 	ts = httptest.NewUnstartedServer(h)
 	l, err := net.Listen("tcp", testServerAddress)
