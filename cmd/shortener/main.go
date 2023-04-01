@@ -8,7 +8,6 @@ import (
 	"net"
 	"net/http"
 	_ "net/http/pprof"
-	"os"
 	"os/signal"
 	"syscall"
 	"time"
@@ -37,7 +36,7 @@ func main() {
 
 	fmt.Printf("Build version: %s\nBuild date: %s\nBuild commit: %s\n", buildVersion, buildDate, buildCommit)
 
-	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
 	defer cancel()
 
 	config, err := config.Load()
