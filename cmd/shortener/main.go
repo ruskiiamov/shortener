@@ -8,7 +8,6 @@ import (
 	"net"
 	"net/http"
 	_ "net/http/pprof"
-	"os"
 	"os/signal"
 	"syscall"
 	"time"
@@ -18,6 +17,7 @@ import (
 	"github.com/ruskiiamov/shortener/internal/data"
 	"github.com/ruskiiamov/shortener/internal/server"
 	"github.com/ruskiiamov/shortener/internal/url"
+	"golang.org/x/crypto/acme/autocert"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -36,10 +36,13 @@ func main() {
 
 	fmt.Printf("Build version: %s\nBuild date: %s\nBuild commit: %s\n", buildVersion, buildDate, buildCommit)
 
-	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
 	defer cancel()
 
-	config := config.Load()
+	config, err := config.Load()
+	if err != nil {
+		log.Fatal(err)
+	}
 
 	dataKeeper, err := data.NewKeeper(config.DatabaseDSN, config.FileStoragePath)
 	if err != nil {
@@ -50,17 +53,23 @@ func main() {
 	router := chi.NewRouter()
 	handler := server.NewHandler(ctx, urlConverter, router, config.BaseURL, config.AuthSignKey)
 
+	manager := &autocert.Manager{Prompt: autocert.AcceptTOS}
+
 	s := &http.Server{
 		Addr:    config.ServerAddress,
 		Handler: handler,
 		BaseContext: func(_ net.Listener) context.Context {
 			return ctx
 		},
+		TLSConfig: manager.TLSConfig(),
 	}
 
 	g, gCtx := errgroup.WithContext(ctx)
 
 	g.Go(func() error {
+		if config.EnableHTTPS {
+			return s.ListenAndServeTLS("", "")
+		}
 		return s.ListenAndServe()
 	})
 
