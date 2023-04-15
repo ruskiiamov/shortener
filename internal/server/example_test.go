@@ -21,7 +21,10 @@ func Example() {
 
 	router := chi.NewRouter()
 
-	handler := server.NewHandler(context.Background(), urlConverter, router, "http://localhost:8080", "secret_key")
+	handler, err := server.NewHandler(context.Background(), urlConverter, router, "http://localhost:8080", "secret_key", "")
+	if err != nil {
+		panic(err)
+	}
 
 	server := &http.Server{
 		Addr:    ":8080",

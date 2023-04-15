@@ -19,6 +19,7 @@ type Config struct {
 	DatabaseDSN     string `env:"DATABASE_DSN" json:"database_dsn"`
 	EnableHTTPS     bool   `env:"ENABLE_HTTPS" json:"enable_https"`
 	Config          string `env:"CONFIG"`
+	TrustedSubnet   string `env:"TRUSTED_SUBNET"`
 }
 
 // Load returns structure with configuration parameters.
@@ -35,6 +36,7 @@ func Load() (*Config, error) {
 	flag.BoolVar(&config.EnableHTTPS, "s", config.EnableHTTPS, "Enables HTTPS")
 	flag.StringVar(&config.Config, "config", config.Config, "Configuration file path")
 	flag.StringVar(&config.Config, "c", config.Config, "Configuration file path (shorthand)")
+	flag.StringVar(&config.TrustedSubnet, "t", config.TrustedSubnet, "")
 	flag.Parse()
 
 	if config.Config == "" {
@@ -79,6 +81,10 @@ func Load() (*Config, error) {
 
 	if !config.EnableHTTPS {
 		config.EnableHTTPS = jsonConfig.EnableHTTPS
+	}
+
+	if config.TrustedSubnet == "" {
+		config.TrustedSubnet = jsonConfig.TrustedSubnet
 	}
 
 	return &config, nil

@@ -18,12 +18,16 @@ func testRequest(
 	path string,
 	body []byte,
 	c *http.Cookie,
+	h *http.Header,
 ) (int, string, http.Header) {
 	req, err := http.NewRequest(method, ts.URL+path, bytes.NewBuffer(body))
 	require.NoError(t, err)
 	req = req.WithContext(context.Background())
 	if c != nil {
 		req.AddCookie(c)
+	}
+	if h != nil {
+		req.Header = *h
 	}
 
 	client := &http.Client{

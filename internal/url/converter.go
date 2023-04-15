@@ -53,6 +53,7 @@ type DataKeeper interface {
 	DeleteBatch(ctx context.Context, batch map[string][]int) error
 	Ping(ctx context.Context) error
 	Close(ctx context.Context) error
+	GetStats(ctx context.Context) (urls, users int, err error)
 }
 
 // URL is the core entity for URL shortener.
@@ -72,6 +73,7 @@ type Converter interface {
 	GetAllByUser(ctx context.Context, userID string) ([]URL, error)
 	RemoveBatch(ctx context.Context, batch map[string][]string) error
 	PingKeeper(ctx context.Context) error
+	GetStats(ctx context.Context) (urls, users int, err error)
 }
 
 type converter struct {
@@ -194,6 +196,16 @@ func (c *converter) RemoveBatch(ctx context.Context, batch map[string][]string) 
 // PingKeeper checks the data storage connection.
 func (c *converter) PingKeeper(ctx context.Context) error {
 	return c.dataKeeper.Ping(ctx)
+}
+
+// GetStats returns number of urls and users.
+func (c *converter) GetStats(ctx context.Context) (urls, users int, err error) {
+	urls, users, err = c.dataKeeper.GetStats(ctx)
+	if err != nil {
+		return 0, 0, err
+	}
+
+	return urls, users, nil
 }
 
 func encode(id int) string {

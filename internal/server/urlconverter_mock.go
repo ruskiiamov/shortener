@@ -46,3 +46,8 @@ func (m *mockedConverter) PingKeeper(ctx context.Context) error {
 	args := m.Called()
 	return args.Error(0)
 }
+
+func (m *mockedConverter) GetStats(ctx context.Context) (urls, users int, err error) {
+	args := m.Called(ctx)
+	return args.Int(0), args.Int(1), args.Error(2)
+}

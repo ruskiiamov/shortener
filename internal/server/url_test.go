@@ -19,6 +19,7 @@ const (
 	testBaseURL       = "http://127.0.0.1:8080"
 	testServerAddress = "127.0.0.1:8080"
 	testSignKey       = "secret"
+	testCIDR          = "192.168.0.0/16"
 )
 
 var mConverter *mockedConverter
@@ -26,7 +27,10 @@ var ts *httptest.Server
 
 func init() {
 	mConverter = new(mockedConverter)
-	h := NewHandler(context.Background(), mConverter, chi.NewRouter(), testBaseURL, testSignKey)
+	h, err := NewHandler(context.Background(), mConverter, chi.NewRouter(), testBaseURL, testSignKey, testCIDR)
+	if err != nil {
+		panic(err)
+	}
 
 	ts = httptest.NewUnstartedServer(h)
 	l, err := net.Listen("tcp", testServerAddress)
@@ -69,7 +73,7 @@ func TestGetUrl(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			mConverter.On("GetOriginal", mock.Anything, tt.encID).Return(tt.res, tt.err)
 
-			statusCode, _, header := testRequest(t, ts, http.MethodGet, "/"+tt.encID, nil, nil)
+			statusCode, _, header := testRequest(t, ts, http.MethodGet, "/"+tt.encID, nil, nil, nil)
 
 			mConverter.AssertExpectations(t)
 
@@ -139,7 +143,7 @@ func TestAddURL(t *testing.T) {
 
 			cookie := &http.Cookie{Name: authCookieName, Value: tt.authCookie}
 
-			statusCode, body, _ := testRequest(t, ts, http.MethodPost, "/", []byte(tt.body), cookie)
+			statusCode, body, _ := testRequest(t, ts, http.MethodPost, "/", []byte(tt.body), cookie, nil)
 
 			mConverter.AssertExpectations(t)
 
@@ -210,7 +214,7 @@ func TestAddURLFromJSON(t *testing.T) {
 
 			cookie := &http.Cookie{Name: authCookieName, Value: tt.authCookie}
 
-			statusCode, respBody, header := testRequest(t, ts, http.MethodPost, "/api/shorten", []byte(jsonBody), cookie)
+			statusCode, respBody, header := testRequest(t, ts, http.MethodPost, "/api/shorten", []byte(jsonBody), cookie, nil)
 
 			mConverter.AssertExpectations(t)
 
@@ -256,7 +260,7 @@ func TestAddURLBatch(t *testing.T) {
 
 			cookie := &http.Cookie{Name: authCookieName, Value: tt.authCookie}
 
-			statusCode, respBody, header := testRequest(t, ts, http.MethodPost, "/api/shorten/batch", []byte(tt.jsonBody), cookie)
+			statusCode, respBody, header := testRequest(t, ts, http.MethodPost, "/api/shorten/batch", []byte(tt.jsonBody), cookie, nil)
 
 			assert.Equal(t, http.StatusCreated, statusCode)
 			assert.Equal(t, "application/json", header.Get("Content-Type"))
@@ -309,7 +313,7 @@ func TestGetAllURL(t *testing.T) {
 
 			cookie := &http.Cookie{Name: authCookieName, Value: tt.authCookie}
 
-			statusCode, respBody, header := testRequest(t, ts, http.MethodGet, "/api/user/urls", nil, cookie)
+			statusCode, respBody, header := testRequest(t, ts, http.MethodGet, "/api/user/urls", nil, cookie, nil)
 
 			mConverter.AssertExpectations(t)
 
@@ -326,9 +330,63 @@ func TestDeleteURLBatch(t *testing.T) {
 
 	jsonBody := `["1","2","5"]`
 
-	statusCode, _, _ := testRequest(t, ts, http.MethodDelete, "/api/user/urls", []byte(jsonBody), cookie)
+	statusCode, _, _ := testRequest(t, ts, http.MethodDelete, "/api/user/urls", []byte(jsonBody), cookie, nil)
 
 	assert.Equal(t, 202, statusCode)
+}
+
+func TestStats(t *testing.T) {
+	tests := []struct {
+		name    string
+		ip      string
+		code    int
+		wantErr bool
+	}{
+		{
+			name:    "ok",
+			ip:      "192.168.0.15",
+			code:    200,
+			wantErr: false,
+		},
+		{
+			name:    "not ok",
+			ip:      "10.80.0.12",
+			code:    403,
+			wantErr: true,
+		},
+		{
+			name:    "empty",
+			ip:      "",
+			code:    403,
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			authCookie := "XlBVspVMtREN3fydYOxHRdxJKff1Emw3UwLB5RgQrj9jZmIzMWYzMC1lZmE5LTQyNDQtYjFkNi1lMDRjODQzODc3MWQ="
+			cookie := &http.Cookie{Name: authCookieName, Value: authCookie}
+
+			header := make(http.Header)
+			header.Set(xRealIP, tt.ip)
+
+			if !tt.wantErr {
+				mConverter.On("GetStats", mock.Anything).Return(15, 10, nil).Once()
+			}
+
+			statusCode, body, _ := testRequest(t, ts, http.MethodGet, "/api/internal/stats", nil, cookie, &header)
+
+			if !tt.wantErr {
+				mConverter.AssertExpectations(t)
+			}
+
+			assert.Equal(t, tt.code, statusCode)
+
+			if !tt.wantErr {
+				assert.JSONEq(t, `{"urls":15,"users":10}`, body)
+			}
+		})
+	}
 }
 
 func TestPingDB(t *testing.T) {
@@ -355,7 +413,7 @@ func TestPingDB(t *testing.T) {
 
 			mConverter.On("PingKeeper", mock.Anything).Return(tt.err).Once()
 
-			statusCode, _, _ := testRequest(t, ts, http.MethodGet, "/ping", nil, cookie)
+			statusCode, _, _ := testRequest(t, ts, http.MethodGet, "/ping", nil, cookie, nil)
 
 			assert.Equal(t, tt.status, statusCode)
 		})

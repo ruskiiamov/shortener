@@ -51,7 +51,11 @@ func main() {
 
 	urlConverter := url.NewConverter(dataKeeper)
 	router := chi.NewRouter()
-	handler := server.NewHandler(ctx, urlConverter, router, config.BaseURL, config.AuthSignKey)
+
+	handler, err := server.NewHandler(ctx, urlConverter, router, config.BaseURL, config.AuthSignKey, config.TrustedSubnet)
+	if err != nil {
+		log.Fatal(err)
+	}
 
 	manager := &autocert.Manager{Prompt: autocert.AcceptTOS}
 

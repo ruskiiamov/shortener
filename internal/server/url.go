@@ -37,6 +37,11 @@ type responseAll struct {
 	OriginalURL string `json:"original_url"`
 }
 
+type responseStats struct {
+	URLs  int `json:"urls"`
+	Users int `json:"users"`
+}
+
 func (h *handler) getURL() http.HandlerFunc {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		ctx, cancel := context.WithTimeout(r.Context(), 1*time.Second)
@@ -290,6 +295,34 @@ func (h *handler) deleteURLBatch() http.HandlerFunc {
 		}
 
 		w.WriteHeader(http.StatusAccepted)
+	})
+}
+
+func (h *handler) stats() http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		ctx, cancel := context.WithTimeout(r.Context(), 1*time.Second)
+		defer cancel()
+
+		urls, users, err := h.urlConverter.GetStats(ctx)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		resData := responseStats{
+			URLs:  urls,
+			Users: users,
+		}
+
+		jsonRes, err := json.Marshal(resData)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		w.Header().Add(headers.ContentType, applicationJSON)
+		w.WriteHeader(http.StatusOK)
+		w.Write(jsonRes)
 	})
 }
 

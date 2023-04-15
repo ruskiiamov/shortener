@@ -286,3 +286,47 @@ func TestRemoveBatch(t *testing.T) {
 		})
 	}
 }
+
+func TestGetStats(t *testing.T) {
+	tests := []struct {
+		name  string
+		urls  int
+		users int
+		err   error
+	}{
+		{
+			name:  "ok",
+			urls:  123,
+			users: 98,
+			err:   nil,
+		},
+		{
+			name:  "error",
+			urls:  0,
+			users: 0,
+			err:   errors.New("test error"),
+		},
+	}
+
+	mockedDataKeeper := new(mockedDataKeeper)
+
+	for _, tt := range tests {
+		t.Run("ok", func(t *testing.T) {
+			mockedDataKeeper.On("GetStats", context.Background()).Return(tt.urls, tt.users, tt.err).Once()
+			c := NewConverter(mockedDataKeeper)
+
+			urls, users, err := c.GetStats(context.Background())
+
+			mockedDataKeeper.AssertExpectations(t)
+
+			if tt.err != nil {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+			}
+
+			assert.Equal(t, tt.urls, urls)
+			assert.Equal(t, tt.users, users)
+		})
+	}
+}

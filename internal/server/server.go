@@ -46,7 +46,7 @@ func (h *handler) Close(ctx context.Context) error {
 }
 
 // NewHandler returns handler mux for HTTP server
-func NewHandler(ctx context.Context, u url.Converter, r Router, baseURL, signKey string) *handler {
+func NewHandler(ctx context.Context, u url.Converter, r Router, baseURL, signKey, cidr string) (*handler, error) {
 	h := &handler{
 		router:       r,
 		urlConverter: u,
@@ -58,7 +58,13 @@ func NewHandler(ctx context.Context, u url.Converter, r Router, baseURL, signKey
 	go h.startDeleteURL(ctx)
 
 	initAuth(signKey)
-	h.router.AddMiddlewares(gzipCompress, auth)
+
+	err := setCIDR(cidr)
+	if err != nil {
+		return nil, err
+	}
+
+	h.router.AddMiddlewares(trustedSubnet, gzipCompress, auth)
 
 	h.router.GET("/{id}", h.getURL())
 	h.router.POST("/", h.addURL())
@@ -66,7 +72,8 @@ func NewHandler(ctx context.Context, u url.Converter, r Router, baseURL, signKey
 	h.router.POST("/api/shorten/batch", h.addURLBatch())
 	h.router.GET("/api/user/urls", h.getAllURL())
 	h.router.DELETE("/api/user/urls", h.deleteURLBatch())
+	h.router.GET("/api/internal/stats", h.stats())
 	h.router.GET("/ping", h.pingDB())
 
-	return h
+	return h, nil
 }
