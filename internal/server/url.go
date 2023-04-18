@@ -288,9 +288,9 @@ func (h *handler) deleteURLBatch() http.HandlerFunc {
 			http.Error(w, ctx.Err().Error(), http.StatusInternalServerError)
 			return
 		default:
-			h.delBuf <- &delBatch{
-				userID:     userID.Value,
-				encodedIDs: encodedIDs,
+			h.delBuf <- &url.DelBatch{
+				UserID:     userID.Value,
+				EncodedIDs: encodedIDs,
 			}
 		}
 

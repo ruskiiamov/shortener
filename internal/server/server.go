@@ -6,6 +6,7 @@ import (
 	"net/http"
 
 	"github.com/ruskiiamov/shortener/internal/url"
+	"github.com/ruskiiamov/shortener/internal/user"
 )
 
 // Router is used by server to set all handlers and middlewares.
@@ -22,8 +23,7 @@ type handler struct {
 	router       Router
 	urlConverter url.Converter
 	baseURL      string
-	delBuf       chan *delBatch
-	delFinish    chan struct{}
+	delBuf       chan *url.DelBatch
 }
 
 // ServeHTTP is the method of the http.Handler interface.
@@ -31,40 +31,25 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	h.router.ServeHTTP(w, r)
 }
 
-// Close closes all server goroutines.
-func (h *handler) Close(ctx context.Context) error {
-	close(h.delBuf)
-
-	for {
-		select {
-		case <-h.delFinish:
-			return nil
-		case <-ctx.Done():
-			return ctx.Err()
-		}
-	}
-}
-
 // NewHandler returns handler mux for HTTP server
-func NewHandler(ctx context.Context, u url.Converter, r Router, baseURL, signKey, cidr string) (*handler, error) {
+func NewHandler(ctx context.Context, ua user.Authorizer, uc url.Converter, r Router, delBuf chan *url.DelBatch, baseURL, cidr string) (*handler, error) {
 	h := &handler{
 		router:       r,
-		urlConverter: u,
+		urlConverter: uc,
 		baseURL:      baseURL,
-		delBuf:       make(chan *delBatch),
-		delFinish:    make(chan struct{}),
+		delBuf:       delBuf,
 	}
-
-	go h.startDeleteURL(ctx)
-
-	initAuth(signKey)
 
 	err := setCIDR(cidr)
 	if err != nil {
 		return nil, err
 	}
 
-	h.router.AddMiddlewares(trustedSubnet, gzipCompress, auth)
+	h.router.AddMiddlewares(
+		trustedSubnet,
+		gzipCompress,
+		newAuthMiddleware(ua).handle,
+	)
 
 	h.router.GET("/{id}", h.getURL())
 	h.router.POST("/", h.addURL())

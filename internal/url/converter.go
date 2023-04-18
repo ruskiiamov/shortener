@@ -11,7 +11,7 @@ import (
 
 const base62 = 62
 
-// ErrURLDuplicate for trying tos shorten existing URL. Contains existing URL data.
+// ErrURLDuplicate is for trying to shorten existing URL. Contains existing URL data.
 type ErrURLDuplicate struct {
 	// URL id in data storage.
 	ID int

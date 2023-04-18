@@ -1,4 +1,4 @@
-package server
+package url
 
 import (
 	"context"
@@ -8,21 +8,31 @@ import (
 
 const deletePeriod = 10 * time.Second
 
-type delBatch struct {
-	userID     string
-	encodedIDs []string
+// DelBatch is the item for delete buffer.
+type DelBatch struct {
+	UserID     string
+	EncodedIDs []string
 }
 
-func (h *handler) startDeleteURL(ctx context.Context) {
-	defer close(h.delFinish)
+// StartDeleteURL starts goroutine to periodic deleting URLs and returns
+// the channel to receive buffer items. To stop deleting it is needed to
+// close the channel.
+func StartDeleteURL(ctx context.Context, c Converter) chan *DelBatch {
+	delBuf := make(chan *DelBatch)
 
+	go deleteURL(ctx, delBuf, c)
+
+	return delBuf
+}
+
+func deleteURL(ctx context.Context, delBuf chan *DelBatch, c Converter) {
 	buf := make(map[string][]string)
 
 	defer func() {
 		onCloseCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 
-		err := h.urlConverter.RemoveBatch(onCloseCtx, buf)
+		err := c.RemoveBatch(onCloseCtx, buf)
 		if err != nil {
 			log.Printf("on close delete URL batch error: %v\n", err)
 			return
@@ -33,17 +43,17 @@ func (h *handler) startDeleteURL(ctx context.Context) {
 	t := time.NewTimer(deletePeriod)
 	for {
 		select {
-		case batch, ok := <-h.delBuf:
+		case batch, ok := <-delBuf:
 			if !ok {
 				return
 			}
-			if URLs, ok := buf[batch.userID]; ok {
-				buf[batch.userID] = unique(URLs, batch.encodedIDs)
+			if URLs, ok := buf[batch.UserID]; ok {
+				buf[batch.UserID] = unq(URLs, batch.EncodedIDs)
 			} else {
-				buf[batch.userID] = unique(batch.encodedIDs)
+				buf[batch.UserID] = unq(batch.EncodedIDs)
 			}
 		case <-t.C:
-			err := h.urlConverter.RemoveBatch(ctx, buf)
+			err := c.RemoveBatch(ctx, buf)
 			t.Reset(deletePeriod)
 			if err != nil {
 				log.Printf("delete URL batch error: %v\n", err)
@@ -56,7 +66,7 @@ func (h *handler) startDeleteURL(ctx context.Context) {
 	}
 }
 
-func unique(URLs ...[]string) []string {
+func unq(URLs ...[]string) []string {
 	m := make(map[string]bool)
 
 	unique := make([]string, 0)

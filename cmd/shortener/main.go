@@ -15,10 +15,14 @@ import (
 	"github.com/ruskiiamov/shortener/internal/chi"
 	"github.com/ruskiiamov/shortener/internal/config"
 	"github.com/ruskiiamov/shortener/internal/data"
+	"github.com/ruskiiamov/shortener/internal/grpcserver"
+	pb "github.com/ruskiiamov/shortener/internal/proto"
 	"github.com/ruskiiamov/shortener/internal/server"
 	"github.com/ruskiiamov/shortener/internal/url"
+	"github.com/ruskiiamov/shortener/internal/user"
 	"golang.org/x/crypto/acme/autocert"
 	"golang.org/x/sync/errgroup"
+	"google.golang.org/grpc"
 )
 
 const maxShutdownTime = 3 * time.Second
@@ -49,17 +53,19 @@ func main() {
 		log.Fatal(err)
 	}
 
+	userAuthorizer := user.NewAuthorizer([]byte(config.AuthSignKey))
 	urlConverter := url.NewConverter(dataKeeper)
-	router := chi.NewRouter()
+	delBuf := url.StartDeleteURL(ctx, urlConverter)
 
-	handler, err := server.NewHandler(ctx, urlConverter, router, config.BaseURL, config.AuthSignKey, config.TrustedSubnet)
+	router := chi.NewRouter()
+	handler, err := server.NewHandler(ctx, userAuthorizer, urlConverter, router, delBuf, config.BaseURL, config.TrustedSubnet)
 	if err != nil {
 		log.Fatal(err)
 	}
 
 	manager := &autocert.Manager{Prompt: autocert.AcceptTOS}
 
-	s := &http.Server{
+	httpServer := &http.Server{
 		Addr:    config.ServerAddress,
 		Handler: handler,
 		BaseContext: func(_ net.Listener) context.Context {
@@ -68,13 +74,26 @@ func main() {
 		TLSConfig: manager.TLSConfig(),
 	}
 
+	listen, err := net.Listen("tcp", "127.0.0.1:3200")
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	authInterceptor := grpcserver.NewAuthInterceptor(userAuthorizer)
+	grpcServer := grpc.NewServer(grpc.UnaryInterceptor(authInterceptor))
+	pb.RegisterShortenerServer(grpcServer, grpcserver.NewGRPCServer(urlConverter, delBuf))
+
 	g, gCtx := errgroup.WithContext(ctx)
 
 	g.Go(func() error {
 		if config.EnableHTTPS {
-			return s.ListenAndServeTLS("", "")
+			return httpServer.ListenAndServeTLS("", "")
 		}
-		return s.ListenAndServe()
+		return httpServer.ListenAndServe()
+	})
+
+	g.Go(func() error {
+		return grpcServer.Serve(listen)
 	})
 
 	g.Go(func() error {
@@ -83,15 +102,14 @@ func main() {
 		ctx, cancel := context.WithTimeout(context.Background(), maxShutdownTime)
 		defer cancel()
 
-		err = s.Shutdown(ctx)
+		grpcServer.Stop()
+
+		err = httpServer.Shutdown(ctx)
 		if err != nil {
 			log.Printf("server shutdown error: %s", err)
 		}
 
-		err = handler.Close(ctx)
-		if err != nil {
-			log.Printf("handler close error: %s", err)
-		}
+		close(delBuf)
 
 		err = dataKeeper.Close(ctx)
 		if err != nil {
