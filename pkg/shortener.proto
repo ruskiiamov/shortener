@@ -1,0 +1,86 @@
+syntax = "proto3";
+
+package proto;
+
+option go_package = "github.com/ruskiiamov/shortener/internal/proto";
+
+message GetURLRequest {
+    string id = 1;
+}
+
+message GetURLResponse {
+    string url = 1;
+    string error = 2;
+}
+
+message AddURLRequest {
+    string url = 1;
+}
+
+message AddURLResponse {
+    string id = 1;
+    string error = 2;
+}
+
+message AddURLBatchRequestItem {
+    string correlation_id = 1;
+    string url = 2;
+}
+
+message AddURLBatchRequest {
+    repeated AddURLBatchRequestItem urls = 1;
+}
+
+message AddURLBatchResponseItem {
+    string correlation_id = 1;
+    string id = 2;
+}
+
+message AddURLBatchResponse {
+    repeated AddURLBatchResponseItem ids = 1;
+    string error = 2;
+}
+
+message GetAllURLRequest {}
+
+message GetAllURLResponseItem {
+    string id = 1;
+    string url = 2;
+}
+
+message GetAllURLResponse {
+    repeated GetAllURLResponseItem urls = 1;
+    string error = 2;
+}
+
+message DeleteURLBatchRequest {
+    repeated string ids = 1;
+}
+
+message DeleteURLBatchResponse {
+    string error = 1;
+}
+
+message GetStatsRequest {}
+
+message GetStatsResponse {
+    int32 urls = 1;
+    int32 users = 2;
+    string error = 3;
+}
+
+message PingDBRequest {}
+
+message PingDBResponse {
+    string error = 1;
+}
+
+service Shortener {
+    rpc GetURL(GetURLRequest) returns (GetURLResponse) {}
+    rpc AddURL(AddURLRequest) returns (AddURLResponse) {}
+    rpc AddURLBatch(AddURLBatchRequest) returns (AddURLBatchResponse) {}
+    rpc GetAllURL(GetAllURLRequest) returns (GetAllURLResponse) {}
+    rpc DeleteURLBatch(DeleteURLBatchRequest) returns (DeleteURLBatchResponse) {}
+    rpc GetStats(GetStatsRequest) returns (GetStatsResponse) {}
+    rpc PingDB(PingDBRequest) returns (PingDBResponse) {}
+}

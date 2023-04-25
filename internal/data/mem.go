@@ -240,6 +240,31 @@ func (m *memKeeper) DeleteBatch(ctx context.Context, batch map[string][]int) err
 	return nil
 }
 
+// GetStats returns URL and user number for the whole service.
+func (m *memKeeper) GetStats(ctx context.Context) (urls, users int, err error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	select {
+	default:
+	case <-ctx.Done():
+		return 0, 0, ctx.Err()
+	}
+
+	urlSet := make(map[string]bool)
+	userSet := make(map[string]bool)
+
+	for _, mURL := range m.data.URLs {
+		if mURL.Deleted {
+			continue
+		}
+		urlSet[mURL.Original] = true
+		userSet[mURL.User] = true
+	}
+
+	return len(urlSet), len(userSet), nil
+}
+
 // Ping always returns error because it is not a DB connection.
 func (m *memKeeper) Ping(ctx context.Context) error {
 	select {

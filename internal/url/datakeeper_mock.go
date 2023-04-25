@@ -40,6 +40,12 @@ func (m *mockedDataKeeper) DeleteBatch(ctx context.Context, batch map[string][]i
 	return args.Error(0)
 }
 
+// GetStats is mocked method.
+func (m *mockedDataKeeper) GetStats(ctx context.Context) (urls, users int, err error) {
+	args := m.Called(ctx)
+	return args.Int(0), args.Int(1), args.Error(2)
+}
+
 // Ping is mocked method.
 func (m *mockedDataKeeper) Ping(ctx context.Context) error {
 	args := m.Called(ctx)

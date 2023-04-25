@@ -242,6 +242,21 @@ func (d *dbKeeper) DeleteBatch(ctx context.Context, batch map[string][]int) erro
 	return nil
 }
 
+// GetStats returns URL and user number for the whole service.
+func (d *dbKeeper) GetStats(ctx context.Context) (urls, users int, err error) {
+	err = d.db.QueryRowContext(ctx, `SELECT COUNT(url) FROM urls WHERE deleted=FALSE GROUP BY url;`).Scan(&urls)
+	if err != nil {
+		return 0, 0, fmt.Errorf("cannot count url: %w", err)
+	}
+
+	err = d.db.QueryRowContext(ctx, `SELECT COUNT("user") FROM urls WHERE deleted=FALSE GROUP BY "user";`).Scan(&users)
+	if err != nil {
+		return 0, 0, fmt.Errorf("cannot count users: %w", err)
+	}
+
+	return urls, users, nil
+}
+
 // Ping returns error if DB connection is broken.
 func (d *dbKeeper) Ping(ctx context.Context) error {
 	if err := d.db.PingContext(ctx); err != nil {

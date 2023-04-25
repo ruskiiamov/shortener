@@ -211,6 +211,16 @@ func TestMemDeleteBatch(t *testing.T) {
 	assert.NoError(t, err)
 }
 
+func TestMemGetStats(t *testing.T) {
+	keeper := getKeeper()
+
+	urls, users, err := keeper.GetStats(context.Background())
+
+	assert.NoError(t, err)
+	assert.Equal(t, 3, urls)
+	assert.Equal(t, 2, users)
+}
+
 func TestMemPing(t *testing.T) {
 	keeper := getKeeper()
 
